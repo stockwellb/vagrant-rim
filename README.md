@@ -1,2 +1,2 @@
 # vagrant-rim
-Space scavenger game
+A space scavenger game

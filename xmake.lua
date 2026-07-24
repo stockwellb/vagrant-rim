@@ -18,6 +18,16 @@ target("vagrant-rim")
     add_includedirs("src")
     add_packages("raylib", "raygui", "lua")
 
+    -- macOS controller input goes through Apple's GameController framework
+    -- (gamepad_macos.m) because raylib/GLFW can't read Xbox pads there; every
+    -- other platform uses the no-op gamepad_stub.c + raylib's own gamepad API.
+    if is_plat("macosx") then
+        add_files("src/ui/gamepad_macos.m")
+        remove_files("src/ui/gamepad_stub.c")
+        add_frameworks("GameController", "Foundation")
+        add_mxflags("-fobjc-arc") -- ARC manages the shim's NSMapTable/NSNumbers
+    end
+
     -- Run from the project root during development so assets/ (config.lua,
     -- styles/) resolves relative to the working directory. Installed builds use
     -- the bin/assets layout below.

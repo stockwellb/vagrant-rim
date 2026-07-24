@@ -80,6 +80,40 @@ static void load_gui_style(const Game *game)
     SetShapesTexture((Texture2D){ 0 }, (Rectangle){ 0, 0, 0, 0 });
 }
 
+// Load an up-to-date SDL_GameControllerDB so controllers whose GUID isn't in
+// GLFW's bundled mapping table still register as gamepads. Without a matching
+// mapping, glfwGetGamepadState() returns nothing and raylib reports zero button
+// and axis input even though the pad is "available" (raylib #3651). MUST run
+// after InitWindow — applying mappings before the GLFW window/joystick layer is
+// up has no effect on macOS.
+static void load_gamepad_mappings(void)
+{
+    char path[512];
+    if (!resolve_asset("gamecontrollerdb.txt", path, sizeof(path))) {
+        TraceLog(LOG_WARNING, "GAMEPAD: gamecontrollerdb.txt not found — "
+                              "controllers may not register any input");
+        return;
+    }
+
+    char *db = LoadFileText(path);
+    if (db == NULL) {
+        TraceLog(LOG_WARNING, "GAMEPAD: failed to read '%s'", path);
+        return;
+    }
+    // Synchronous read + parse of the full SDL DB measures ~3 ms one-time here —
+    // negligible against a 16 ms frame — so it stays inline rather than deferred:
+    // lazy-loading risks a controller present at launch missing its mapping on
+    // the first press.
+    int ok = SetGamepadMappings(db); // 1 on success, 0 if GLFW rejected the DB
+    UnloadFileText(db);
+    if (ok == 1) {
+        TraceLog(LOG_INFO, "GAMEPAD: applied mappings from '%s'", path);
+    } else {
+        TraceLog(LOG_WARNING, "GAMEPAD: '%s' was rejected (malformed DB?) — "
+                              "controllers may not register any input", path);
+    }
+}
+
 // Load the configured UI font (.ttf/.otf) and make raygui use it. Loaded
 // ourselves because the .rgs cannot supply a usable font here. The atlas is
 // rasterized at max(font_size, title_size) with bilinear filtering so both
@@ -146,10 +180,13 @@ void game_init(Game *game)
 
     load_gui_style(game);
     load_ui_font(game);
+    load_gamepad_mappings(); // after InitWindow — see function comment
 }
 
 void game_update(Game *game)
 {
+    ui_input_poll(); // refresh controller state once per frame before nav queries
+
     // Esc / gamepad-Start opens the pause overlay while playing; Esc / Start / B
     // closes it (or dismisses the quit prompt) once open.
     if (game->screen == SCREEN_PLAYING) {

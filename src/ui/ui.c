@@ -2,6 +2,8 @@
 
 #include "raygui.h"
 
+#include "ui/gamepad_native.h"
+
 Font ui_font(void)
 {
     return GuiGetFont();
@@ -38,6 +40,11 @@ void ui_text_centered(const char *text, float left, float width, float y, float 
 // pads so it works regardless of which slot the OS assigned the controller.
 static bool pad_pressed(int button)
 {
+    // Native layer first: on macOS it carries the real input (raylib's own
+    // gamepad reads come back empty there); elsewhere it's a no-op stub.
+    if (gamepad_native_button_pressed(button)) {
+        return true;
+    }
     for (int id = 0; id < 4; id++) {
         if (IsGamepadAvailable(id) && IsGamepadButtonPressed(id, button)) {
             return true;
@@ -46,25 +53,37 @@ static bool pad_pressed(int button)
     return false;
 }
 
-// Dominant left-stick displacement across connected gamepads, as a single signed
-// value: negative = up/left (previous item), positive = down/right (next item).
-// Whichever of X/Y is pushed farther wins, so the stick drives both vertical and
-// horizontal menus.
+// Clamp to the [-1, 1] range an axis value is expected to occupy.
+static float clamp_unit(float v)
+{
+    if (v < -1.0f) return -1.0f;
+    if (v > 1.0f) return 1.0f;
+    return v;
+}
+
+// Whichever of the two axes is pushed farther, keeping its sign, so a single
+// stick drives both vertical and horizontal menus.
+static float dominant_axis(float x, float y)
+{
+    return ((x < 0 ? -x : x) >= (y < 0 ? -y : y)) ? x : y;
+}
+
+// Left-stick displacement as a single signed value: negative = up/left (previous
+// item), positive = down/right (next item). Sums each axis across the native
+// (macOS) pad and every raylib pad — so opposing inputs cancel instead of fighting
+// over "most displaced" — then clamps and takes the dominant axis.
 static float pad_step_axis(void)
 {
-    float best = 0.0f;
+    float x = gamepad_native_axis(GAMEPAD_AXIS_LEFT_X);
+    float y = gamepad_native_axis(GAMEPAD_AXIS_LEFT_Y);
     for (int id = 0; id < 4; id++) {
         if (!IsGamepadAvailable(id)) {
             continue;
         }
-        float x = GetGamepadAxisMovement(id, GAMEPAD_AXIS_LEFT_X);
-        float y = GetGamepadAxisMovement(id, GAMEPAD_AXIS_LEFT_Y);
-        float v = ((x < 0 ? -x : x) >= (y < 0 ? -y : y)) ? x : y;
-        if ((v < 0 ? -v : v) > (best < 0 ? -best : best)) {
-            best = v;
-        }
+        x += GetGamepadAxisMovement(id, GAMEPAD_AXIS_LEFT_X);
+        y += GetGamepadAxisMovement(id, GAMEPAD_AXIS_LEFT_Y);
     }
-    return best;
+    return dominant_axis(clamp_unit(x), clamp_unit(y));
 }
 
 // Keyboard edge with OS key-repeat, so holding a direction key keeps stepping.
@@ -103,6 +122,11 @@ bool ui_nav_menu_pressed(void)
 bool ui_nav_cancel_pressed(void)
 {
     return IsKeyPressed(KEY_ESCAPE) || pad_pressed(GAMEPAD_BUTTON_RIGHT_FACE_RIGHT); // B
+}
+
+void ui_input_poll(void)
+{
+    gamepad_native_update();
 }
 
 void ui_menu_nav_reset(MenuNav *nav)

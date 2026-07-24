@@ -72,4 +72,9 @@ bool ui_nav_menu_pressed(void);
 // True when the player pressed cancel/back (Esc or gamepad-B).
 bool ui_nav_cancel_pressed(void);
 
+// Sample controller state for this frame. Call once per frame before any of the
+// nav queries above (drives the macOS GameController-framework input path;
+// harmless no-op elsewhere).
+void ui_input_poll(void);
+
 #endif // VR_UI_UI_H

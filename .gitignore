@@ -57,3 +57,10 @@ dkms.conf
 # xmake
 /build/
 .xmake/
+
+# clangd / LSP compile database (machine-specific absolute paths)
+compile_commands.json
+.cache/
+
+# macOS
+.DS_Store

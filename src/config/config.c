@@ -9,10 +9,30 @@
 
 void config_set_defaults(Config *config)
 {
+    // Window
     config->window.width = 1280;
     config->window.height = 720;
     config->window.target_fps = 60;
     snprintf(config->window.title, sizeof(config->window.title), "%s", "Vagrant Rim");
+
+    // UI: raygui style (colors) and font — empty means use built-in defaults
+    config->ui.style_file[0] = '\0';
+    config->ui.font_file[0] = '\0';
+    config->ui.font_size = 28;
+
+    // UI: shared button layout
+    config->ui.button.width = 240;
+    config->ui.button.height = 48;
+    config->ui.button.gap = 14;
+
+    // UI: loading / title menu
+    snprintf(config->ui.loading_menu.title_text, sizeof(config->ui.loading_menu.title_text), "%s", "VAGRANT RIM");
+    config->ui.loading_menu.title_size = 72;
+    snprintf(config->ui.loading_menu.tagline_text, sizeof(config->ui.loading_menu.tagline_text), "%s", "a space scavenger");
+    config->ui.loading_menu.tagline_size = 20;
+
+    // Debug
+    config->debug.show_fps = false;
 }
 
 // Read an integer field from the table on top of the stack into *out.
@@ -22,6 +42,16 @@ static void read_int_field(lua_State *L, const char *key, int *out)
     lua_getfield(L, -1, key);
     if (lua_isnumber(L, -1)) {
         *out = (int)lua_tointeger(L, -1);
+    }
+    lua_pop(L, 1);
+}
+
+// Read a boolean field from the table on top of the stack into *out.
+static void read_bool_field(lua_State *L, const char *key, bool *out)
+{
+    lua_getfield(L, -1, key);
+    if (lua_isboolean(L, -1)) {
+        *out = lua_toboolean(L, -1);
     }
     lua_pop(L, 1);
 }
@@ -41,6 +71,38 @@ static void fail(char *err, int err_size, const char *msg)
     if (err && err_size > 0) {
         snprintf(err, (size_t)err_size, "%s", msg);
     }
+}
+
+// Read the `ui` table and its subtables. Expects the root config table on top
+// of the stack.
+static void read_ui(lua_State *L, UiConfig *ui)
+{
+    lua_getfield(L, -1, "ui");
+    if (lua_istable(L, -1)) {
+        read_string_field(L, "style_file", ui->style_file, (int)sizeof(ui->style_file));
+        read_string_field(L, "font_file", ui->font_file, (int)sizeof(ui->font_file));
+        read_int_field(L, "font_size", &ui->font_size);
+
+        // ui.button = { ... } — shared button layout
+        lua_getfield(L, -1, "button");
+        if (lua_istable(L, -1)) {
+            read_int_field(L, "width", &ui->button.width);
+            read_int_field(L, "height", &ui->button.height);
+            read_int_field(L, "gap", &ui->button.gap);
+        }
+        lua_pop(L, 1); // button
+
+        // ui.loading_menu = { ... }
+        lua_getfield(L, -1, "loading_menu");
+        if (lua_istable(L, -1)) {
+            read_string_field(L, "title_text", ui->loading_menu.title_text, (int)sizeof(ui->loading_menu.title_text));
+            read_int_field(L, "title_size", &ui->loading_menu.title_size);
+            read_string_field(L, "tagline_text", ui->loading_menu.tagline_text, (int)sizeof(ui->loading_menu.tagline_text));
+            read_int_field(L, "tagline_size", &ui->loading_menu.tagline_size);
+        }
+        lua_pop(L, 1); // loading_menu
+    }
+    lua_pop(L, 1); // ui
 }
 
 bool config_load(Config *config, const char *path, char *err, int err_size)
@@ -76,6 +138,16 @@ bool config_load(Config *config, const char *path, char *err, int err_size)
         read_string_field(L, "title", config->window.title, (int)sizeof(config->window.title));
     }
     lua_pop(L, 1); // window
+
+    // ui = { menu = { ... } }
+    read_ui(L, &config->ui);
+
+    // debug = { ... }
+    lua_getfield(L, -1, "debug");
+    if (lua_istable(L, -1)) {
+        read_bool_field(L, "show_fps", &config->debug.show_fps);
+    }
+    lua_pop(L, 1); // debug
 
     lua_close(L);
     return true;

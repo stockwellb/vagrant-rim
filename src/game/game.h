@@ -5,12 +5,20 @@
 
 #include "config/config.h"
 
+// Which screen the game is currently presenting.
+typedef enum ScreenId {
+    SCREEN_LOADING_MENU = 0,
+    SCREEN_PLAYING,
+} ScreenId;
+
 // Top-level game state. Individual subsystems (ship, world, economy, ...)
 // will hang off of this struct as the project grows.
 typedef struct Game {
     Config config;
     int screen_width;
     int screen_height;
+    ScreenId screen;
+    bool has_save; // whether a saved game exists (gates the Continue option)
 } Game;
 
 // Lifecycle: create the window and initialize subsystems.

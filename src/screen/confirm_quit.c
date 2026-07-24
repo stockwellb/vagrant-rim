@@ -5,10 +5,14 @@
 
 #include "ui/ui.h"
 
-ConfirmQuitAction confirm_quit_draw(int screen_width, int screen_height,
+ConfirmQuitAction confirm_quit_draw(MenuNav *nav, int screen_width, int screen_height,
                                     const ConfirmQuitConfig *cfg,
                                     const ButtonConfig *button)
 {
+    // Save (0) / Discard (1). The buttons sit side by side, but MenuNav is
+    // index-based, so up/down or left/right on the pad both traverse them.
+    ui_menu_nav_begin(nav, 2);
+
     // Dim the frozen scene behind the modal.
     DrawRectangle(0, 0, screen_width, screen_height,
                   (Color){ 0, 0, 0, (unsigned char)cfg->scrim_alpha });
@@ -38,11 +42,15 @@ ConfirmQuitAction confirm_quit_draw(int screen_width, int screen_height,
     float by = box.y + bh - btn_h - 28.0f;
 
     ConfirmQuitAction action = CONFIRM_QUIT_NONE;
-    if (GuiButton((Rectangle){ bx, by, btn_w, btn_h }, cfg->confirm_text)) {
+    if (ui_menu_button(nav, 0, (Rectangle){ bx, by, btn_w, btn_h }, cfg->confirm_text,
+                       true)) {
         action = CONFIRM_QUIT_SAVE;
     }
-    if (GuiButton((Rectangle){ bx + btn_w + col_gap, by, btn_w, btn_h }, cfg->cancel_text)) {
+    if (ui_menu_button(nav, 1, (Rectangle){ bx + btn_w + col_gap, by, btn_w, btn_h },
+                       cfg->cancel_text, true)) {
         action = CONFIRM_QUIT_DISCARD;
     }
+
+    ui_menu_nav_end(nav);
     return action;
 }

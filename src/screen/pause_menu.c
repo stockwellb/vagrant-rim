@@ -5,10 +5,13 @@
 
 #include "ui/ui.h"
 
-PauseMenuAction pause_menu_draw(int screen_width, int screen_height,
+PauseMenuAction pause_menu_draw(MenuNav *nav, int screen_width, int screen_height,
                                 const PauseMenuConfig *menu, const ButtonConfig *button,
                                 bool recently_saved)
 {
+    // Resume (0), Save (1), Quit (2).
+    ui_menu_nav_begin(nav, 3);
+
     // Dim the frozen play scene behind the menu.
     DrawRectangle(0, 0, screen_width, screen_height,
                   (Color){ 0, 0, 0, (unsigned char)menu->scrim_alpha });
@@ -28,12 +31,12 @@ PauseMenuAction pause_menu_draw(int screen_width, int screen_height,
 
     PauseMenuAction action = PAUSE_NONE;
 
-    if (GuiButton((Rectangle){ x, y, bw, bh }, menu->resume_text)) {
+    if (ui_menu_button(nav, 0, (Rectangle){ x, y, bw, bh }, menu->resume_text, true)) {
         action = PAUSE_RESUME;
     }
 
     y += bh + gap;
-    if (GuiButton((Rectangle){ x, y, bw, bh }, menu->save_text)) {
+    if (ui_menu_button(nav, 1, (Rectangle){ x, y, bw, bh }, menu->save_text, true)) {
         action = PAUSE_SAVE;
     }
     if (recently_saved) {
@@ -44,9 +47,10 @@ PauseMenuAction pause_menu_draw(int screen_width, int screen_height,
     }
 
     y += bh + gap;
-    if (GuiButton((Rectangle){ x, y, bw, bh }, menu->quit_text)) {
+    if (ui_menu_button(nav, 2, (Rectangle){ x, y, bw, bh }, menu->quit_text, true)) {
         action = PAUSE_QUIT;
     }
 
+    ui_menu_nav_end(nav);
     return action;
 }

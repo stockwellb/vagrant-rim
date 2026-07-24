@@ -5,10 +5,13 @@
 
 #include "ui/ui.h"
 
-int slot_picker_draw(int screen_width, int screen_height, SlotPickerMode mode,
+int slot_picker_draw(MenuNav *nav, int screen_width, int screen_height, SlotPickerMode mode,
                      const SlotPickerConfig *cfg, const ButtonConfig *button,
                      const SlotInfo *slots, int count)
 {
+    // One focusable item per slot, plus Back at the end (index == count).
+    ui_menu_nav_begin(nav, count + 1);
+
     Color text_color = ui_style_color(TEXT_COLOR_NORMAL);
 
     // --- Title -----------------------------------------------------------
@@ -54,13 +57,9 @@ int slot_picker_draw(int screen_width, int screen_height, SlotPickerMode mode,
 
         // In load mode, empty slots can't be selected.
         bool selectable = (mode == SLOT_PICKER_LOAD) ? slots[i].used : true;
-        if (!selectable) {
-            GuiSetState(STATE_DISABLED);
-        }
-        if (GuiButton((Rectangle){ x, y, row_w, row_h }, label)) {
+        if (ui_menu_button(nav, i, (Rectangle){ x, y, row_w, row_h }, label, selectable)) {
             chosen = i;
         }
-        GuiSetState(STATE_NORMAL);
 
         y += stride;
     }
@@ -69,10 +68,17 @@ int slot_picker_draw(int screen_width, int screen_height, SlotPickerMode mode,
     GuiSetStyle(DEFAULT, TEXT_PADDING, prev_pad);
 
     // --- Back (bottom-anchored, centered) --------------------------------
-    if (GuiButton((Rectangle){ (screen_width - back_w) / 2.0f, back_y, back_w, back_h },
-                  cfg->back_text)) {
+    if (ui_menu_button(nav, count,
+                       (Rectangle){ (screen_width - back_w) / 2.0f, back_y, back_w, back_h },
+                       cfg->back_text, true)) {
         chosen = SLOT_PICKER_BACK;
     }
 
+    ui_menu_nav_end(nav);
+
+    // Esc / gamepad-B backs out, matching the Back button.
+    if (nav->cancel) {
+        chosen = SLOT_PICKER_BACK;
+    }
     return chosen;
 }

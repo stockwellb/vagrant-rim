@@ -8,6 +8,7 @@
 #include "config/config.h"
 #include "save/save.h"
 #include "screen/slot_picker.h"
+#include "ui/ui.h" // MenuNav
 
 // Which screen the game is currently presenting.
 typedef enum ScreenId {
@@ -37,6 +38,9 @@ typedef struct Game {
     bool ui_font_loaded;        // whether we own ui_font and must UnloadFont it at shutdown
     char toast_text[64];        // transient status/error message (e.g. "SAVE FAILED")
     double toast_until;         // GetTime() before which the toast is drawn
+    MenuNav nav;                // keyboard/gamepad focus state for the active menu
+    ScreenId prev_screen;       // screen drawn last frame, to detect transitions
+    bool prev_confirm;          // confirm_quit state last frame (pause vs. modal)
 } Game;
 
 // Lifecycle: create the window and initialize subsystems.

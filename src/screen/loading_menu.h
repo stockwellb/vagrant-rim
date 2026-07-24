@@ -4,6 +4,7 @@
 #include <stdbool.h>
 
 #include "config/config.h"
+#include "ui/ui.h" // MenuNav
 
 // Actions the loading menu can emit in a given frame. LOADING_MENU_NONE means
 // the player has not chosen anything yet this frame.
@@ -20,8 +21,8 @@ typedef enum LoadingMenuAction {
 // comes from `menu`, button geometry from `button`. Colors and widget text size
 // come from the active raygui style (GuiGetStyle), not from config.
 // Must be called within a BeginDrawing()/EndDrawing() pass (raygui is immediate mode).
-LoadingMenuAction loading_menu_draw(int screen_width, int screen_height, bool has_save,
-                                    const LoadingMenuConfig *menu,
+LoadingMenuAction loading_menu_draw(MenuNav *nav, int screen_width, int screen_height,
+                                    bool has_save, const LoadingMenuConfig *menu,
                                     const ButtonConfig *button);
 
 #endif // VR_SCREEN_LOADING_MENU_H

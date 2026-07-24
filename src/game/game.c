@@ -136,6 +136,9 @@ void game_init(Game *game)
     game->ui_font_loaded = false;
     game->toast_text[0] = '\0';
     game->toast_until = 0.0;
+    ui_menu_nav_reset(&game->nav);
+    game->prev_screen = game->screen;
+    game->prev_confirm = game->confirm_quit;
 
     InitWindow(game->screen_width, game->screen_height, game->config.window.title);
     SetTargetFPS(game->config.window.target_fps);
@@ -147,14 +150,17 @@ void game_init(Game *game)
 
 void game_update(Game *game)
 {
-    // Esc toggles the pause overlay while playing.
-    if (IsKeyPressed(KEY_ESCAPE)) {
-        if (game->screen == SCREEN_PLAYING) {
+    // Esc / gamepad-Start opens the pause overlay while playing; Esc / Start / B
+    // closes it (or dismisses the quit prompt) once open.
+    if (game->screen == SCREEN_PLAYING) {
+        if (ui_nav_menu_pressed()) {
             game->screen = SCREEN_PAUSE;
             game->confirm_quit = false;
-        } else if (game->screen == SCREEN_PAUSE) {
+        }
+    } else if (game->screen == SCREEN_PAUSE) {
+        if (ui_nav_menu_pressed() || ui_nav_cancel_pressed()) {
             if (game->confirm_quit) {
-                game->confirm_quit = false; // Esc dismisses the prompt
+                game->confirm_quit = false; // back out of the prompt to the pause menu
             } else {
                 game->screen = SCREEN_PLAYING;
             }
@@ -349,6 +355,16 @@ static void draw_playing(const Game *game)
 
 void game_draw(Game *game)
 {
+    // Reset menu focus to the top whenever the visible menu changes — either a
+    // new screen, or the pause menu toggling to/from the quit prompt (which have
+    // different button counts). Done here, after game_update, so it catches every
+    // transition regardless of which handler triggered it.
+    if (game->screen != game->prev_screen || game->confirm_quit != game->prev_confirm) {
+        ui_menu_nav_reset(&game->nav);
+        game->prev_screen = game->screen;
+        game->prev_confirm = game->confirm_quit;
+    }
+
     BeginDrawing();
     // Background comes from the active raygui style, so the whole UI shares one
     // theme source (the .rgs); falls back to raygui's default when none is set.
@@ -357,7 +373,7 @@ void game_draw(Game *game)
     switch (game->screen) {
         case SCREEN_LOADING_MENU: {
             LoadingMenuAction action = loading_menu_draw(
-                game->screen_width, game->screen_height, game->has_save,
+                &game->nav, game->screen_width, game->screen_height, game->has_save,
                 &game->config.ui.loading_menu, &game->config.ui.button);
             handle_loading_menu_action(game, action);
             break;
@@ -370,7 +386,7 @@ void game_draw(Game *game)
             if (game->confirm_quit) {
                 // Esc cancels (handled in game_update)
                 ConfirmQuitAction action = confirm_quit_draw(
-                    game->screen_width, game->screen_height,
+                    &game->nav, game->screen_width, game->screen_height,
                     &game->config.ui.confirm_quit, &game->config.ui.button);
                 handle_confirm_quit(game, action);
             } else {
@@ -378,14 +394,14 @@ void game_draw(Game *game)
                     (GetTime() - game->last_save_time) <
                     game->config.ui.pause_menu.saved_notice_seconds;
                 PauseMenuAction action = pause_menu_draw(
-                    game->screen_width, game->screen_height, &game->config.ui.pause_menu,
-                    &game->config.ui.button, recently_saved);
+                    &game->nav, game->screen_width, game->screen_height,
+                    &game->config.ui.pause_menu, &game->config.ui.button, recently_saved);
                 handle_pause_action(game, action);
             }
             break;
         }
         case SCREEN_SLOT_PICKER: {
-            int chosen = slot_picker_draw(game->screen_width, game->screen_height,
+            int chosen = slot_picker_draw(&game->nav, game->screen_width, game->screen_height,
                                           game->picker_mode, &game->config.ui.slot_picker,
                                           &game->config.ui.button, game->slot_infos,
                                           game->slot_info_count);

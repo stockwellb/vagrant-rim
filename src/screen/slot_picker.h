@@ -4,6 +4,7 @@
 #include <stdbool.h>
 
 #include "config/config.h"
+#include "ui/ui.h" // MenuNav
 
 // Per-slot summary the picker renders. `label` is a human-readable one-liner
 // built by the caller (e.g. "fuel 100  A:0 B:0 C:0  2m ago" or "- empty -").
@@ -28,7 +29,7 @@ typedef enum SlotPickerMode {
 // geometry; colors/font from the active style. Rows are shrunk to fit when there
 // are more slots than fit at the configured height, so nothing renders offscreen.
 // Must be called within a BeginDrawing()/EndDrawing() pass.
-int slot_picker_draw(int screen_width, int screen_height, SlotPickerMode mode,
+int slot_picker_draw(MenuNav *nav, int screen_width, int screen_height, SlotPickerMode mode,
                      const SlotPickerConfig *cfg, const ButtonConfig *button,
                      const SlotInfo *slots, int count);
 

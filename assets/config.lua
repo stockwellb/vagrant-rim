@@ -35,4 +35,7 @@ return {
 	debug = {
 		show_fps = false,
 	},
+	save = {
+		slots = 6,
+	},
 }

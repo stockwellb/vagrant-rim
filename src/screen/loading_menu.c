@@ -55,5 +55,10 @@ LoadingMenuAction loading_menu_draw(int screen_width, int screen_height, bool ha
     action = LOADING_MENU_NEW;
   }
 
+  y += btn_h + gap;
+  if (GuiButton((Rectangle){x, y, btn_w, btn_h}, "EXIT")) {
+    action = LOADING_MENU_EXIT;
+  }
+
   return action;
 }

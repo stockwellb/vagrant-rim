@@ -12,6 +12,7 @@ typedef enum LoadingMenuAction {
     LOADING_MENU_CONTINUE,
     LOADING_MENU_LOAD,
     LOADING_MENU_NEW,
+    LOADING_MENU_EXIT,
 } LoadingMenuAction;
 
 // Draw the loading / title menu and return the action chosen this frame (if

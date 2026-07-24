@@ -7,6 +7,8 @@
 #include "lauxlib.h"
 #include "lualib.h"
 
+#include "save/save.h" // SAVE_MAX_SLOTS
+
 void config_set_defaults(Config *config)
 {
     // Window
@@ -33,6 +35,9 @@ void config_set_defaults(Config *config)
 
     // Debug
     config->debug.show_fps = false;
+
+    // Save
+    config->save.slots = 6;
 }
 
 // Read an integer field from the table on top of the stack into *out.
@@ -148,6 +153,20 @@ bool config_load(Config *config, const char *path, char *err, int err_size)
         read_bool_field(L, "show_fps", &config->debug.show_fps);
     }
     lua_pop(L, 1); // debug
+
+    // save = { ... }
+    lua_getfield(L, -1, "save");
+    if (lua_istable(L, -1)) {
+        read_int_field(L, "slots", &config->save.slots);
+    }
+    lua_pop(L, 1); // save
+
+    // Clamp slot count to a sane, array-safe range.
+    if (config->save.slots < 1) {
+        config->save.slots = 1;
+    } else if (config->save.slots > SAVE_MAX_SLOTS) {
+        config->save.slots = SAVE_MAX_SLOTS;
+    }
 
     lua_close(L);
     return true;

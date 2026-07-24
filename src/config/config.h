@@ -49,6 +49,11 @@ typedef struct DebugConfig {
     bool show_fps;
 } DebugConfig;
 
+// Save-system options, mirrored from the `save` table in config.lua.
+typedef struct SaveConfig {
+    int slots; // number of save slots (clamped to [1, SAVE_MAX_SLOTS])
+} SaveConfig;
+
 // Top-level game configuration loaded from Lua at startup. Visual theme (colors,
 // widget text size) is owned by the raygui style (.rgs), read via GuiGetStyle at
 // the draw site; it is intentionally not duplicated here.
@@ -56,6 +61,7 @@ typedef struct Config {
     WindowConfig window;
     UiConfig ui;
     DebugConfig debug;
+    SaveConfig save;
 } Config;
 
 // Populate `config` with built-in defaults. Always succeeds.

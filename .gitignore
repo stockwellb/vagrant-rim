@@ -64,3 +64,6 @@ compile_commands.json
 
 # macOS
 .DS_Store
+
+# game saves (generated at runtime)
+/saves/

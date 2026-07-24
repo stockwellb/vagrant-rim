@@ -30,6 +30,45 @@ return {
 			title_size = 72,
 			tagline_text = "a space scavenger story",
 			tagline_size = 20,
+			continue_text = "CONTINUE",
+			load_text = "LOAD",
+			new_text = "NEW GAME",
+			exit_text = "EXIT",
+		},
+		-- The in-game pause overlay.
+		pause_menu = {
+			title_text = "PAUSED",
+			title_size = 48,
+			resume_text = "RESUME",
+			save_text = "SAVE",
+			quit_text = "QUIT TO MENU",
+			saved_notice = "saved",
+			saved_notice_seconds = 2.0, -- how long the "saved" confirmation shows
+			scrim_alpha = 180,          -- 0-255 dimming behind the overlay
+		},
+		-- The load / new-game slot chooser.
+		slot_picker = {
+			load_title = "LOAD GAME",
+			new_title = "NEW GAME",
+			title_size = 48,
+			back_text = "BACK",
+			empty_text = "- empty -",
+			-- Slot rows are a wide list, distinct from the shared button layout.
+			row_width = 700,
+			row_height = 48,
+			row_gap = 10,
+		},
+		-- The "save before quitting?" modal shown from the pause menu.
+		confirm_quit = {
+			title_text = "QUIT TO MENU",
+			title_size = 28,
+			message_text = "Save before quitting?",
+			message_size = 22,
+			confirm_text = "YES",
+			cancel_text = "NO",
+			box_width = 560,
+			box_height = 240,
+			scrim_alpha = 180, -- 0-255 dimming behind the modal
 		},
 	},
 	debug = {

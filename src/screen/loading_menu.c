@@ -40,23 +40,23 @@ LoadingMenuAction loading_menu_draw(int screen_width, int screen_height, bool ha
   if (!has_save) {
     GuiSetState(STATE_DISABLED);
   }
-  if (GuiButton((Rectangle){x, y, btn_w, btn_h}, "CONTINUE")) {
+  if (GuiButton((Rectangle){x, y, btn_w, btn_h}, menu->continue_text)) {
     action = LOADING_MENU_CONTINUE;
   }
   GuiSetState(STATE_NORMAL);
 
   y += btn_h + gap;
-  if (GuiButton((Rectangle){x, y, btn_w, btn_h}, "LOAD")) {
+  if (GuiButton((Rectangle){x, y, btn_w, btn_h}, menu->load_text)) {
     action = LOADING_MENU_LOAD;
   }
 
   y += btn_h + gap;
-  if (GuiButton((Rectangle){x, y, btn_w, btn_h}, "NEW GAME")) {
+  if (GuiButton((Rectangle){x, y, btn_w, btn_h}, menu->new_text)) {
     action = LOADING_MENU_NEW;
   }
 
   y += btn_h + gap;
-  if (GuiButton((Rectangle){x, y, btn_w, btn_h}, "EXIT")) {
+  if (GuiButton((Rectangle){x, y, btn_w, btn_h}, menu->exit_text)) {
     action = LOADING_MENU_EXIT;
   }
 

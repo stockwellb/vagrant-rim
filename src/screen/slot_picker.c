@@ -4,23 +4,22 @@
 #include "raylib.h"
 
 int slot_picker_draw(int screen_width, int screen_height, SlotPickerMode mode,
-                     const SlotInfo *slots, int count) {
+                     const SlotPickerConfig *cfg, const SlotInfo *slots, int count) {
   (void)screen_height; // layout is top-anchored; height unused for now
   Font font = GuiGetFont();
   Color text_color = GetColor(GuiGetStyle(DEFAULT, TEXT_COLOR_NORMAL));
   float spacing = (float)GuiGetStyle(DEFAULT, TEXT_SPACING);
 
   // --- Title -----------------------------------------------------------
-  const char *title = (mode == SLOT_PICKER_LOAD) ? "LOAD GAME" : "NEW GAME";
-  int title_size = 48;
-  Vector2 tsize = MeasureTextEx(font, title, (float)title_size, spacing);
+  const char *title = (mode == SLOT_PICKER_LOAD) ? cfg->load_title : cfg->new_title;
+  Vector2 tsize = MeasureTextEx(font, title, (float)cfg->title_size, spacing);
   DrawTextEx(font, title, (Vector2){ (screen_width - tsize.x) / 2.0f, 60.0f },
-             (float)title_size, spacing, text_color);
+             (float)cfg->title_size, spacing, text_color);
 
   // --- Slot rows -------------------------------------------------------
-  const float row_w = 700.0f;
-  const float row_h = 48.0f;
-  const float gap = 10.0f;
+  const float row_w = (float)cfg->row_width;
+  const float row_h = (float)cfg->row_height;
+  const float gap = (float)cfg->row_gap;
   float x = (screen_width - row_w) / 2.0f;
   float y = 150.0f;
 
@@ -53,7 +52,7 @@ int slot_picker_draw(int screen_width, int screen_height, SlotPickerMode mode,
 
   // --- Back ------------------------------------------------------------
   float back_w = 200.0f;
-  if (GuiButton((Rectangle){ (screen_width - back_w) / 2.0f, y + gap, back_w, row_h }, "BACK")) {
+  if (GuiButton((Rectangle){ (screen_width - back_w) / 2.0f, y + gap, back_w, row_h }, cfg->back_text)) {
     chosen = SLOT_PICKER_BACK;
   }
 

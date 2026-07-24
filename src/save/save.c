@@ -3,9 +3,17 @@
 #include <stdio.h>
 #include <time.h>
 
+#include "raylib.h" // DirectoryExists / MakeDirectory for the slot directory
+
 #include "lua.h"
 #include "lauxlib.h"
 #include "lualib.h"
+
+#include "util/lua_util.h" // shared Lua table field readers
+
+// Save directory, resolved relative to the working directory (the project root
+// during development via set_rundir).
+static const char *kSaveDir = "saves";
 
 long long save_now(void)
 {
@@ -52,40 +60,6 @@ bool save_write(const GameSave *save, const char *path)
     return true;
 }
 
-// Read an integer field from the table on top of the stack, or `fallback`.
-static int get_int(lua_State *L, const char *key, int fallback)
-{
-    int out = fallback;
-    lua_getfield(L, -1, key);
-    if (lua_isnumber(L, -1)) {
-        out = (int)lua_tointeger(L, -1);
-    }
-    lua_pop(L, 1);
-    return out;
-}
-
-static long long get_llong(lua_State *L, const char *key, long long fallback)
-{
-    long long out = fallback;
-    lua_getfield(L, -1, key);
-    if (lua_isnumber(L, -1)) {
-        out = (long long)lua_tointeger(L, -1);
-    }
-    lua_pop(L, 1);
-    return out;
-}
-
-static float get_float(lua_State *L, const char *key, float fallback)
-{
-    float out = fallback;
-    lua_getfield(L, -1, key);
-    if (lua_isnumber(L, -1)) {
-        out = (float)lua_tonumber(L, -1);
-    }
-    lua_pop(L, 1);
-    return out;
-}
-
 bool save_load(GameSave *save, const char *path)
 {
     lua_State *L = luaL_newstate();
@@ -100,25 +74,29 @@ bool save_load(GameSave *save, const char *path)
     }
 
     GameSave tmp;
-    tmp.version = get_int(L, "version", SAVE_VERSION);
-    tmp.created_at = get_llong(L, "created_at", 0);
-    tmp.saved_at = get_llong(L, "saved_at", tmp.created_at);
-    tmp.fuel = get_int(L, "fuel", 0);
+    tmp.version = SAVE_VERSION;
+    lua_read_int_field(L, "version", &tmp.version);
+    tmp.created_at = 0;
+    lua_read_llong_field(L, "created_at", &tmp.created_at);
+    tmp.saved_at = tmp.created_at; // default to created_at if absent
+    lua_read_llong_field(L, "saved_at", &tmp.saved_at);
+    tmp.fuel = 0;
+    lua_read_int_field(L, "fuel", &tmp.fuel);
 
     tmp.resource_a = tmp.resource_b = tmp.resource_c = 0;
     lua_getfield(L, -1, "resources");
     if (lua_istable(L, -1)) {
-        tmp.resource_a = get_int(L, "a", 0);
-        tmp.resource_b = get_int(L, "b", 0);
-        tmp.resource_c = get_int(L, "c", 0);
+        lua_read_int_field(L, "a", &tmp.resource_a);
+        lua_read_int_field(L, "b", &tmp.resource_b);
+        lua_read_int_field(L, "c", &tmp.resource_c);
     }
     lua_pop(L, 1); // resources
 
     tmp.player_x = tmp.player_y = 0.0f;
     lua_getfield(L, -1, "player");
     if (lua_istable(L, -1)) {
-        tmp.player_x = get_float(L, "x", 0.0f);
-        tmp.player_y = get_float(L, "y", 0.0f);
+        lua_read_float_field(L, "x", &tmp.player_x);
+        lua_read_float_field(L, "y", &tmp.player_y);
     }
     lua_pop(L, 1); // player
 
@@ -135,4 +113,54 @@ bool save_exists(const char *path)
         return true;
     }
     return false;
+}
+
+void save_slot_path(int slot, char *out, int out_size)
+{
+    snprintf(out, (size_t)out_size, "%s/slot%d.lua", kSaveDir, slot);
+}
+
+bool save_write_slot(const GameSave *save, int slot)
+{
+    if (!DirectoryExists(kSaveDir)) {
+        MakeDirectory(kSaveDir);
+    }
+    char path[512];
+    save_slot_path(slot, path, sizeof(path));
+    return save_write(save, path);
+}
+
+bool save_load_slot(GameSave *save, int slot)
+{
+    char path[512];
+    save_slot_path(slot, path, sizeof(path));
+    return save_load(save, path);
+}
+
+bool save_any_slot_used(int slot_count)
+{
+    char path[512];
+    for (int i = 0; i < slot_count; i++) {
+        save_slot_path(i, path, sizeof(path));
+        if (save_exists(path)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+int save_most_recent_slot(int slot_count)
+{
+    char path[512];
+    int best = -1;
+    long long best_time = -1;
+    for (int i = 0; i < slot_count; i++) {
+        save_slot_path(i, path, sizeof(path));
+        GameSave s;
+        if (save_load(&s, path) && s.saved_at > best_time) {
+            best_time = s.saved_at;
+            best = i;
+        }
+    }
+    return best;
 }

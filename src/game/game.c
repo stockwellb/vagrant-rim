@@ -8,20 +8,8 @@
 #include "screen/loading_menu.h"
 #include "screen/pause_menu.h"
 #include "screen/slot_picker.h"
+#include "screen/confirm_quit.h"
 #include "save/save.h"
-
-// Show the "saved" confirmation in the pause menu for this many seconds.
-#define SAVE_NOTICE_SECONDS 2.0
-
-// Save directory, resolved relative to the working directory (the project root
-// during development via set_rundir).
-static const char *kSaveDir = "saves";
-
-// Build the file path for a save slot into `out`.
-static void slot_path(int slot, char *out, int out_size)
-{
-    snprintf(out, (size_t)out_size, "%s/slot%d.lua", kSaveDir, slot);
-}
 
 // Candidate locations for the config file, tried in order. Covers both running
 // from the project root during development and the installed bin/assets layout.
@@ -122,36 +110,6 @@ static void load_ui_font(const Game *game)
     TraceLog(LOG_INFO, "FONT: loaded '%s' (atlas %dpx, text %dpx)", path, atlas, size);
 }
 
-// Whether any save slot exists on disk (gates Continue/Load).
-static bool any_slot_used(const Game *game)
-{
-    char path[512];
-    for (int i = 0; i < game->config.save.slots; i++) {
-        slot_path(i, path, sizeof(path));
-        if (save_exists(path)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-// Find the slot with the newest saved_at, or -1 if no slots exist.
-static int most_recent_slot(const Game *game)
-{
-    char path[512];
-    int best = -1;
-    long long best_time = -1;
-    for (int i = 0; i < game->config.save.slots; i++) {
-        slot_path(i, path, sizeof(path));
-        GameSave s;
-        if (save_load(&s, path) && s.saved_at > best_time) {
-            best_time = s.saved_at;
-            best = i;
-        }
-    }
-    return best;
-}
-
 void game_init(Game *game)
 {
     load_config(game);
@@ -159,12 +117,13 @@ void game_init(Game *game)
     game->screen_width = game->config.window.width;
     game->screen_height = game->config.window.height;
     game->screen = SCREEN_LOADING_MENU;
-    game->has_save = any_slot_used(game); // enables Continue/Load if a save exists
+    game->has_save = save_any_slot_used(game->config.save.slots); // enables Continue/Load
     game->active_slot = 0;
     game->last_save_time = -1000.0;
     game->should_quit = false;
     game->confirm_quit = false;
     game->picker_mode = SLOT_PICKER_LOAD;
+    game->slot_info_count = 0;
 
     InitWindow(game->screen_width, game->screen_height, game->config.window.title);
     SetTargetFPS(game->config.window.target_fps);
@@ -195,19 +154,13 @@ void game_update(Game *game)
 // Persist the active save to its slot and note the time for the confirmation.
 static void save_game(Game *game)
 {
-    if (!DirectoryExists(kSaveDir)) {
-        MakeDirectory(kSaveDir);
-    }
     game->save.saved_at = save_now();
-
-    char path[512];
-    slot_path(game->active_slot, path, sizeof(path));
-    if (save_write(&game->save, path)) {
+    if (save_write_slot(&game->save, game->active_slot)) {
         game->has_save = true;
         game->last_save_time = GetTime();
-        TraceLog(LOG_INFO, "SAVE: wrote '%s'", path);
+        TraceLog(LOG_INFO, "SAVE: wrote slot %d", game->active_slot);
     } else {
-        TraceLog(LOG_WARNING, "SAVE: failed to write '%s'", path);
+        TraceLog(LOG_WARNING, "SAVE: failed to write slot %d", game->active_slot);
     }
 }
 
@@ -229,33 +182,49 @@ static void handle_pause_action(Game *game, PauseMenuAction action)
     }
 }
 
+// Handle an action emitted by the quit-confirmation modal. Both outcomes return
+// to the loading menu; only the confirm path saves first.
+static void handle_confirm_quit(Game *game, ConfirmQuitAction action)
+{
+    switch (action) {
+        case CONFIRM_QUIT_SAVE:
+            save_game(game);
+            game->confirm_quit = false;
+            game->screen = SCREEN_LOADING_MENU;
+            break;
+        case CONFIRM_QUIT_DISCARD:
+            game->confirm_quit = false;
+            game->screen = SCREEN_LOADING_MENU;
+            break;
+        case CONFIRM_QUIT_NONE:
+            break;
+    }
+}
+
+// Enter the slot picker for the given purpose, refreshing its cached summaries.
+static void enter_slot_picker(Game *game, SlotPickerMode mode);
+
 // Handle an action emitted by the loading menu.
 static void handle_loading_menu_action(Game *game, LoadingMenuAction action)
 {
-    char path[512];
     switch (action) {
         case LOADING_MENU_CONTINUE: {
             // Quick-load the most-recently-saved slot.
-            int slot = most_recent_slot(game);
-            if (slot >= 0) {
-                slot_path(slot, path, sizeof(path));
-                if (save_load(&game->save, path)) {
-                    game->active_slot = slot;
-                    game->screen = SCREEN_PLAYING;
-                    TraceLog(LOG_INFO, "CONTINUE: loaded slot %d", slot);
-                }
+            int slot = save_most_recent_slot(game->config.save.slots);
+            if (slot >= 0 && save_load_slot(&game->save, slot)) {
+                game->active_slot = slot;
+                game->screen = SCREEN_PLAYING;
+                TraceLog(LOG_INFO, "CONTINUE: loaded slot %d", slot);
             }
             break;
         }
         case LOADING_MENU_LOAD:
             // Choose a slot to load.
-            game->picker_mode = SLOT_PICKER_LOAD;
-            game->screen = SCREEN_SLOT_PICKER;
+            enter_slot_picker(game, SLOT_PICKER_LOAD);
             break;
         case LOADING_MENU_NEW:
             // Choose a slot to start a new game in (so New can't clobber blindly).
-            game->picker_mode = SLOT_PICKER_NEW;
-            game->screen = SCREEN_SLOT_PICKER;
+            enter_slot_picker(game, SLOT_PICKER_NEW);
             break;
         case LOADING_MENU_EXIT:
             TraceLog(LOG_INFO, "LOADING_MENU: exit");
@@ -280,9 +249,7 @@ static void handle_slot_picker(Game *game, int chosen)
     // chosen >= 0: a slot index
     game->active_slot = chosen;
     if (game->picker_mode == SLOT_PICKER_LOAD) {
-        char path[512];
-        slot_path(chosen, path, sizeof(path));
-        if (save_load(&game->save, path)) {
+        if (save_load_slot(&game->save, chosen)) {
             game->screen = SCREEN_PLAYING;
             TraceLog(LOG_INFO, "LOAD: loaded slot %d", chosen);
         } else {
@@ -296,31 +263,41 @@ static void handle_slot_picker(Game *game, int chosen)
     }
 }
 
-// Build the summary array the slot picker renders. Returns the slot count.
-static int build_slot_infos(const Game *game, SlotInfo *out)
+// Rebuild the cached slot summaries the picker renders. Reads each save file
+// once (each is a Lua parse), so this is done on entering the picker rather than
+// every frame while it is open.
+static void refresh_slot_infos(Game *game)
 {
     int count = game->config.save.slots;
     long long now = save_now();
-    char path[512];
     for (int i = 0; i < count; i++) {
-        slot_path(i, path, sizeof(path));
+        SlotInfo *out = &game->slot_infos[i];
         GameSave s;
-        if (save_load(&s, path)) {
-            out[i].used = true;
+        if (save_load_slot(&s, i)) {
+            out->used = true;
             long long age = now - s.saved_at;
             long long mins = age / 60;
             const char *when = (mins < 1)    ? "just now"
                                : (mins < 60) ? TextFormat("%lldm ago", mins)
                                              : TextFormat("%lldh ago", mins / 60);
-            snprintf(out[i].label, sizeof(out[i].label),
+            snprintf(out->label, sizeof(out->label),
                      "fuel %d   A:%d B:%d C:%d   %s",
                      s.fuel, s.resource_a, s.resource_b, s.resource_c, when);
         } else {
-            out[i].used = false;
-            snprintf(out[i].label, sizeof(out[i].label), "%s", "- empty -");
+            out->used = false;
+            snprintf(out->label, sizeof(out->label), "%s",
+                     game->config.ui.slot_picker.empty_text);
         }
     }
-    return count;
+    game->slot_info_count = count;
+}
+
+// Enter the slot picker for the given purpose, refreshing its cached summaries.
+static void enter_slot_picker(Game *game, SlotPickerMode mode)
+{
+    game->picker_mode = mode;
+    refresh_slot_infos(game);
+    game->screen = SCREEN_SLOT_PICKER;
 }
 
 // Draw the (placeholder) play scene: a readout of the active save so we can
@@ -340,51 +317,6 @@ static void draw_playing(const Game *game)
                (Vector2){ 24, 130 }, 20, spc, c);
     DrawTextEx(f, "esc: pause", (Vector2){ 24, (float)game->screen_height - 40 }, 20, spc,
                GetColor(GuiGetStyle(DEFAULT, TEXT_COLOR_DISABLED)));
-}
-
-// Draw the "save before quitting?" modal and handle its buttons. Uses buttons
-// sized like the rest of the UI (GuiMessageBox hardcodes 24px buttons, which
-// collide with our larger font).
-static void draw_confirm_quit(Game *game)
-{
-    int w = game->screen_width, h = game->screen_height;
-    DrawRectangle(0, 0, w, h, (Color){ 0, 0, 0, 180 });
-
-    Font f = GuiGetFont();
-    float spc = (float)GuiGetStyle(DEFAULT, TEXT_SPACING);
-    Color txt = GetColor(GuiGetStyle(DEFAULT, TEXT_COLOR_NORMAL));
-    Color fill = GetColor(GuiGetStyle(DEFAULT, BASE_COLOR_NORMAL));
-    Color border = GetColor(GuiGetStyle(DEFAULT, BORDER_COLOR_NORMAL));
-
-    float bw = 560.0f, bh = 240.0f;
-    Rectangle box = { (w - bw) / 2.0f, (h - bh) / 2.0f, bw, bh };
-    DrawRectangleRec(box, fill);
-    DrawRectangleLinesEx(box, 2.0f, border);
-
-    const char *title = "QUIT TO MENU";
-    Vector2 ts = MeasureTextEx(f, title, 28.0f, spc);
-    DrawTextEx(f, title, (Vector2){ box.x + (bw - ts.x) / 2.0f, box.y + 28.0f }, 28.0f, spc, txt);
-
-    const char *msg = "Save before quitting?";
-    Vector2 ms = MeasureTextEx(f, msg, 22.0f, spc);
-    DrawTextEx(f, msg, (Vector2){ box.x + (bw - ms.x) / 2.0f, box.y + 92.0f }, 22.0f, spc, txt);
-
-    float btn_w = 200.0f;
-    float btn_h = (float)game->config.ui.button.height;
-    float gap = 24.0f;
-    float total = btn_w * 2.0f + gap;
-    float bx = box.x + (bw - total) / 2.0f;
-    float by = box.y + bh - btn_h - 28.0f;
-
-    if (GuiButton((Rectangle){ bx, by, btn_w, btn_h }, "YES")) {
-        save_game(game);
-        game->confirm_quit = false;
-        game->screen = SCREEN_LOADING_MENU;
-    }
-    if (GuiButton((Rectangle){ bx + btn_w + gap, by, btn_w, btn_h }, "NO")) {
-        game->confirm_quit = false;
-        game->screen = SCREEN_LOADING_MENU;
-    }
 }
 
 void game_draw(Game *game)
@@ -408,22 +340,26 @@ void game_draw(Game *game)
         case SCREEN_PAUSE: {
             draw_playing(game); // frozen scene behind the overlay
             if (game->confirm_quit) {
-                draw_confirm_quit(game); // Esc cancels (handled in game_update)
+                // Esc cancels (handled in game_update)
+                ConfirmQuitAction action = confirm_quit_draw(
+                    game->screen_width, game->screen_height,
+                    &game->config.ui.confirm_quit, &game->config.ui.button);
+                handle_confirm_quit(game, action);
             } else {
                 bool recently_saved =
-                    (GetTime() - game->last_save_time) < SAVE_NOTICE_SECONDS;
+                    (GetTime() - game->last_save_time) <
+                    game->config.ui.pause_menu.saved_notice_seconds;
                 PauseMenuAction action = pause_menu_draw(
-                    game->screen_width, game->screen_height, &game->config.ui.button,
-                    recently_saved);
+                    game->screen_width, game->screen_height, &game->config.ui.pause_menu,
+                    &game->config.ui.button, recently_saved);
                 handle_pause_action(game, action);
             }
             break;
         }
         case SCREEN_SLOT_PICKER: {
-            SlotInfo slots[SAVE_MAX_SLOTS];
-            int count = build_slot_infos(game, slots);
             int chosen = slot_picker_draw(game->screen_width, game->screen_height,
-                                          game->picker_mode, slots, count);
+                                          game->picker_mode, &game->config.ui.slot_picker,
+                                          game->slot_infos, game->slot_info_count);
             handle_slot_picker(game, chosen);
             break;
         }

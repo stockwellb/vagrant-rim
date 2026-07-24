@@ -3,6 +3,8 @@
 
 #include <stdbool.h>
 
+#include "config/config.h"
+
 // Per-slot summary the picker renders. `label` is a human-readable one-liner
 // built by the caller (e.g. "fuel 100  A:0 B:0 C:0  2m ago" or "- empty -").
 typedef struct SlotInfo {
@@ -21,9 +23,10 @@ typedef enum SlotPickerMode {
 #define SLOT_PICKER_BACK (-2) // back/cancel pressed
 
 // Draw the slot picker and return the slot index chosen this frame, or
-// SLOT_PICKER_NONE / SLOT_PICKER_BACK. `slots` has `count` entries.
+// SLOT_PICKER_NONE / SLOT_PICKER_BACK. `slots` has `count` entries. Content and
+// row geometry come from `cfg`; colors/font from the active style.
 // Must be called within a BeginDrawing()/EndDrawing() pass.
 int slot_picker_draw(int screen_width, int screen_height, SlotPickerMode mode,
-                     const SlotInfo *slots, int count);
+                     const SlotPickerConfig *cfg, const SlotInfo *slots, int count);
 
 #endif // VR_SCREEN_SLOT_PICKER_H

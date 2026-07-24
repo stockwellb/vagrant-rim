@@ -15,10 +15,11 @@ typedef enum PauseMenuAction {
 
 // Draw the pause overlay (a dim scrim over the frozen play scene, a title, and
 // buttons) and return the action chosen this frame. `recently_saved` shows a
-// brief "saved" confirmation next to the Save button. Button geometry comes
-// from `button`; colors/font from the active style.
+// brief confirmation next to the Save button. Content comes from `menu`, button
+// geometry from `button`; colors/font from the active style.
 // Must be called within a BeginDrawing()/EndDrawing() pass.
 PauseMenuAction pause_menu_draw(int screen_width, int screen_height,
-                                const ButtonConfig *button, bool recently_saved);
+                                const PauseMenuConfig *menu, const ButtonConfig *button,
+                                bool recently_saved);
 
 #endif // VR_SCREEN_PAUSE_MENU_H

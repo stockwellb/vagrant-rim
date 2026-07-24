@@ -33,6 +33,29 @@ void save_new(GameSave *save);
 // Current wall-clock time in unix seconds (for stamping saved_at before a write).
 long long save_now(void);
 
+// --- Slot addressing --------------------------------------------------------
+// The save module owns both the on-disk format (above) and the slot naming /
+// location convention: slots live at "saves/slot<N>.lua" relative to the working
+// directory. Callers supply the slot count (owned by config), not the module.
+
+// Build the on-disk path for `slot` into `out`.
+void save_slot_path(int slot, char *out, int out_size);
+
+// Write *save to `slot`, creating the save directory if needed. Stamp
+// save->saved_at before calling. Returns true on success.
+bool save_write_slot(const GameSave *save, int slot);
+
+// Load `slot` into *save. Returns true on success; on failure *save is untouched.
+bool save_load_slot(GameSave *save, int slot);
+
+// Whether any of slots [0, slot_count) exists on disk (gates Continue/Load).
+bool save_any_slot_used(int slot_count);
+
+// Index of the slot with the newest saved_at in [0, slot_count), or -1 if none.
+int save_most_recent_slot(int slot_count);
+
+// --- Low-level path API (the slot API above wraps these) ---------------------
+
 // Write *save to a Lua file at `path`. The parent directory must already exist.
 // Returns true on success.
 bool save_write(const GameSave *save, const char *path);

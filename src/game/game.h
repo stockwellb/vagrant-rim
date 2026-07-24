@@ -29,6 +29,8 @@ typedef struct Game {
     bool should_quit;      // set by an Exit action to end the game loop
     bool confirm_quit;     // pause menu is showing the "save before quitting?" prompt
     SlotPickerMode picker_mode; // what the slot picker is currently for
+    SlotInfo slot_infos[SAVE_MAX_SLOTS]; // slot summaries, rebuilt on entering the picker
+    int slot_info_count;        // number of valid entries in slot_infos
 } Game;
 
 // Lifecycle: create the window and initialize subsystems.

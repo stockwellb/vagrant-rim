@@ -7,7 +7,8 @@
 #include "lauxlib.h"
 #include "lualib.h"
 
-#include "save/save.h" // SAVE_MAX_SLOTS
+#include "util/lua_util.h" // shared Lua table field readers
+#include "save/save.h"     // SAVE_MAX_SLOTS
 
 void config_set_defaults(Config *config)
 {
@@ -28,47 +29,55 @@ void config_set_defaults(Config *config)
     config->ui.button.gap = 14;
 
     // UI: loading / title menu
-    snprintf(config->ui.loading_menu.title_text, sizeof(config->ui.loading_menu.title_text), "%s", "VAGRANT RIM");
-    config->ui.loading_menu.title_size = 72;
-    snprintf(config->ui.loading_menu.tagline_text, sizeof(config->ui.loading_menu.tagline_text), "%s", "a space scavenger");
-    config->ui.loading_menu.tagline_size = 20;
+    LoadingMenuConfig *lm = &config->ui.loading_menu;
+    snprintf(lm->title_text, sizeof(lm->title_text), "%s", "VAGRANT RIM");
+    lm->title_size = 72;
+    snprintf(lm->tagline_text, sizeof(lm->tagline_text), "%s", "a space scavenger");
+    lm->tagline_size = 20;
+    snprintf(lm->continue_text, sizeof(lm->continue_text), "%s", "CONTINUE");
+    snprintf(lm->load_text, sizeof(lm->load_text), "%s", "LOAD");
+    snprintf(lm->new_text, sizeof(lm->new_text), "%s", "NEW GAME");
+    snprintf(lm->exit_text, sizeof(lm->exit_text), "%s", "EXIT");
+
+    // UI: pause overlay
+    PauseMenuConfig *pm = &config->ui.pause_menu;
+    snprintf(pm->title_text, sizeof(pm->title_text), "%s", "PAUSED");
+    pm->title_size = 48;
+    snprintf(pm->resume_text, sizeof(pm->resume_text), "%s", "RESUME");
+    snprintf(pm->save_text, sizeof(pm->save_text), "%s", "SAVE");
+    snprintf(pm->quit_text, sizeof(pm->quit_text), "%s", "QUIT TO MENU");
+    snprintf(pm->saved_notice, sizeof(pm->saved_notice), "%s", "saved");
+    pm->saved_notice_seconds = 2.0f;
+    pm->scrim_alpha = 180;
+
+    // UI: slot picker
+    SlotPickerConfig *sp = &config->ui.slot_picker;
+    snprintf(sp->load_title, sizeof(sp->load_title), "%s", "LOAD GAME");
+    snprintf(sp->new_title, sizeof(sp->new_title), "%s", "NEW GAME");
+    sp->title_size = 48;
+    snprintf(sp->back_text, sizeof(sp->back_text), "%s", "BACK");
+    snprintf(sp->empty_text, sizeof(sp->empty_text), "%s", "- empty -");
+    sp->row_width = 700;
+    sp->row_height = 48;
+    sp->row_gap = 10;
+
+    // UI: quit-confirmation modal
+    ConfirmQuitConfig *cq = &config->ui.confirm_quit;
+    snprintf(cq->title_text, sizeof(cq->title_text), "%s", "QUIT TO MENU");
+    cq->title_size = 28;
+    snprintf(cq->message_text, sizeof(cq->message_text), "%s", "Save before quitting?");
+    cq->message_size = 22;
+    snprintf(cq->confirm_text, sizeof(cq->confirm_text), "%s", "YES");
+    snprintf(cq->cancel_text, sizeof(cq->cancel_text), "%s", "NO");
+    cq->box_width = 560;
+    cq->box_height = 240;
+    cq->scrim_alpha = 180;
 
     // Debug
     config->debug.show_fps = false;
 
     // Save
     config->save.slots = 6;
-}
-
-// Read an integer field from the table on top of the stack into *out.
-// Leaves *out untouched (keeping its default) if the key is missing or not a number.
-static void read_int_field(lua_State *L, const char *key, int *out)
-{
-    lua_getfield(L, -1, key);
-    if (lua_isnumber(L, -1)) {
-        *out = (int)lua_tointeger(L, -1);
-    }
-    lua_pop(L, 1);
-}
-
-// Read a boolean field from the table on top of the stack into *out.
-static void read_bool_field(lua_State *L, const char *key, bool *out)
-{
-    lua_getfield(L, -1, key);
-    if (lua_isboolean(L, -1)) {
-        *out = lua_toboolean(L, -1);
-    }
-    lua_pop(L, 1);
-}
-
-// Read a string field from the table on top of the stack into a fixed buffer.
-static void read_string_field(lua_State *L, const char *key, char *out, int out_size)
-{
-    lua_getfield(L, -1, key);
-    if (lua_isstring(L, -1)) {
-        snprintf(out, (size_t)out_size, "%s", lua_tostring(L, -1));
-    }
-    lua_pop(L, 1);
 }
 
 static void fail(char *err, int err_size, const char *msg)
@@ -84,28 +93,79 @@ static void read_ui(lua_State *L, UiConfig *ui)
 {
     lua_getfield(L, -1, "ui");
     if (lua_istable(L, -1)) {
-        read_string_field(L, "style_file", ui->style_file, (int)sizeof(ui->style_file));
-        read_string_field(L, "font_file", ui->font_file, (int)sizeof(ui->font_file));
-        read_int_field(L, "font_size", &ui->font_size);
+        lua_read_string_field(L, "style_file", ui->style_file, (int)sizeof(ui->style_file));
+        lua_read_string_field(L, "font_file", ui->font_file, (int)sizeof(ui->font_file));
+        lua_read_int_field(L, "font_size", &ui->font_size);
 
         // ui.button = { ... } — shared button layout
         lua_getfield(L, -1, "button");
         if (lua_istable(L, -1)) {
-            read_int_field(L, "width", &ui->button.width);
-            read_int_field(L, "height", &ui->button.height);
-            read_int_field(L, "gap", &ui->button.gap);
+            lua_read_int_field(L, "width", &ui->button.width);
+            lua_read_int_field(L, "height", &ui->button.height);
+            lua_read_int_field(L, "gap", &ui->button.gap);
         }
         lua_pop(L, 1); // button
 
         // ui.loading_menu = { ... }
         lua_getfield(L, -1, "loading_menu");
         if (lua_istable(L, -1)) {
-            read_string_field(L, "title_text", ui->loading_menu.title_text, (int)sizeof(ui->loading_menu.title_text));
-            read_int_field(L, "title_size", &ui->loading_menu.title_size);
-            read_string_field(L, "tagline_text", ui->loading_menu.tagline_text, (int)sizeof(ui->loading_menu.tagline_text));
-            read_int_field(L, "tagline_size", &ui->loading_menu.tagline_size);
+            LoadingMenuConfig *lm = &ui->loading_menu;
+            lua_read_string_field(L, "title_text", lm->title_text, (int)sizeof(lm->title_text));
+            lua_read_int_field(L, "title_size", &lm->title_size);
+            lua_read_string_field(L, "tagline_text", lm->tagline_text, (int)sizeof(lm->tagline_text));
+            lua_read_int_field(L, "tagline_size", &lm->tagline_size);
+            lua_read_string_field(L, "continue_text", lm->continue_text, (int)sizeof(lm->continue_text));
+            lua_read_string_field(L, "load_text", lm->load_text, (int)sizeof(lm->load_text));
+            lua_read_string_field(L, "new_text", lm->new_text, (int)sizeof(lm->new_text));
+            lua_read_string_field(L, "exit_text", lm->exit_text, (int)sizeof(lm->exit_text));
         }
         lua_pop(L, 1); // loading_menu
+
+        // ui.pause_menu = { ... }
+        lua_getfield(L, -1, "pause_menu");
+        if (lua_istable(L, -1)) {
+            PauseMenuConfig *pm = &ui->pause_menu;
+            lua_read_string_field(L, "title_text", pm->title_text, (int)sizeof(pm->title_text));
+            lua_read_int_field(L, "title_size", &pm->title_size);
+            lua_read_string_field(L, "resume_text", pm->resume_text, (int)sizeof(pm->resume_text));
+            lua_read_string_field(L, "save_text", pm->save_text, (int)sizeof(pm->save_text));
+            lua_read_string_field(L, "quit_text", pm->quit_text, (int)sizeof(pm->quit_text));
+            lua_read_string_field(L, "saved_notice", pm->saved_notice, (int)sizeof(pm->saved_notice));
+            lua_read_float_field(L, "saved_notice_seconds", &pm->saved_notice_seconds);
+            lua_read_int_field(L, "scrim_alpha", &pm->scrim_alpha);
+        }
+        lua_pop(L, 1); // pause_menu
+
+        // ui.slot_picker = { ... }
+        lua_getfield(L, -1, "slot_picker");
+        if (lua_istable(L, -1)) {
+            SlotPickerConfig *sp = &ui->slot_picker;
+            lua_read_string_field(L, "load_title", sp->load_title, (int)sizeof(sp->load_title));
+            lua_read_string_field(L, "new_title", sp->new_title, (int)sizeof(sp->new_title));
+            lua_read_int_field(L, "title_size", &sp->title_size);
+            lua_read_string_field(L, "back_text", sp->back_text, (int)sizeof(sp->back_text));
+            lua_read_string_field(L, "empty_text", sp->empty_text, (int)sizeof(sp->empty_text));
+            lua_read_int_field(L, "row_width", &sp->row_width);
+            lua_read_int_field(L, "row_height", &sp->row_height);
+            lua_read_int_field(L, "row_gap", &sp->row_gap);
+        }
+        lua_pop(L, 1); // slot_picker
+
+        // ui.confirm_quit = { ... }
+        lua_getfield(L, -1, "confirm_quit");
+        if (lua_istable(L, -1)) {
+            ConfirmQuitConfig *cq = &ui->confirm_quit;
+            lua_read_string_field(L, "title_text", cq->title_text, (int)sizeof(cq->title_text));
+            lua_read_int_field(L, "title_size", &cq->title_size);
+            lua_read_string_field(L, "message_text", cq->message_text, (int)sizeof(cq->message_text));
+            lua_read_int_field(L, "message_size", &cq->message_size);
+            lua_read_string_field(L, "confirm_text", cq->confirm_text, (int)sizeof(cq->confirm_text));
+            lua_read_string_field(L, "cancel_text", cq->cancel_text, (int)sizeof(cq->cancel_text));
+            lua_read_int_field(L, "box_width", &cq->box_width);
+            lua_read_int_field(L, "box_height", &cq->box_height);
+            lua_read_int_field(L, "scrim_alpha", &cq->scrim_alpha);
+        }
+        lua_pop(L, 1); // confirm_quit
     }
     lua_pop(L, 1); // ui
 }
@@ -137,10 +197,10 @@ bool config_load(Config *config, const char *path, char *err, int err_size)
     // window = { ... }
     lua_getfield(L, -1, "window");
     if (lua_istable(L, -1)) {
-        read_int_field(L, "width", &config->window.width);
-        read_int_field(L, "height", &config->window.height);
-        read_int_field(L, "target_fps", &config->window.target_fps);
-        read_string_field(L, "title", config->window.title, (int)sizeof(config->window.title));
+        lua_read_int_field(L, "width", &config->window.width);
+        lua_read_int_field(L, "height", &config->window.height);
+        lua_read_int_field(L, "target_fps", &config->window.target_fps);
+        lua_read_string_field(L, "title", config->window.title, (int)sizeof(config->window.title));
     }
     lua_pop(L, 1); // window
 
@@ -150,14 +210,14 @@ bool config_load(Config *config, const char *path, char *err, int err_size)
     // debug = { ... }
     lua_getfield(L, -1, "debug");
     if (lua_istable(L, -1)) {
-        read_bool_field(L, "show_fps", &config->debug.show_fps);
+        lua_read_bool_field(L, "show_fps", &config->debug.show_fps);
     }
     lua_pop(L, 1); // debug
 
     // save = { ... }
     lua_getfield(L, -1, "save");
     if (lua_istable(L, -1)) {
-        read_int_field(L, "slots", &config->save.slots);
+        lua_read_int_field(L, "slots", &config->save.slots);
     }
     lua_pop(L, 1); // save
 

@@ -21,13 +21,57 @@ typedef struct ButtonConfig {
 } ButtonConfig;
 
 // Loading / title screen configuration, from `ui.loading_menu` in config.lua.
-// This is one of many menus; it owns only its own title/tagline content.
+// This is one of many menus; it owns only its own title/tagline content and
+// button labels.
 typedef struct LoadingMenuConfig {
     char title_text[128];
     int title_size;
     char tagline_text[128];
     int tagline_size;
+    char continue_text[32];
+    char load_text[32];
+    char new_text[32];
+    char exit_text[32];
 } LoadingMenuConfig;
+
+// Pause overlay configuration, from `ui.pause_menu` in config.lua.
+typedef struct PauseMenuConfig {
+    char title_text[128];
+    int title_size;
+    char resume_text[32];
+    char save_text[32];
+    char quit_text[32];
+    char saved_notice[32];        // brief confirmation shown next to Save after a write
+    float saved_notice_seconds;   // how long that confirmation stays up
+    int scrim_alpha;              // 0-255 dimming of the frozen scene behind the menu
+} PauseMenuConfig;
+
+// "Save before quitting?" modal configuration, from `ui.confirm_quit`.
+typedef struct ConfirmQuitConfig {
+    char title_text[128];
+    int title_size;
+    char message_text[128];
+    int message_size;
+    char confirm_text[32]; // YES: save then quit to menu
+    char cancel_text[32];  // NO: quit to menu without saving
+    int box_width;
+    int box_height;
+    int scrim_alpha; // 0-255 dimming of the frozen scene behind the modal
+} ConfirmQuitConfig;
+
+// Slot picker configuration, from `ui.slot_picker` in config.lua. Titles differ
+// by mode (load vs. new); row geometry is a list, so it is separate from the
+// shared button layout.
+typedef struct SlotPickerConfig {
+    char load_title[128]; // shown in load mode
+    char new_title[128];  // shown in new-game mode
+    int title_size;
+    char back_text[32];
+    char empty_text[32]; // label for an unused slot
+    int row_width;
+    int row_height;
+    int row_gap;
+} SlotPickerConfig;
 
 // UI configuration, mirrored from the `ui` table in config.lua.
 typedef struct UiConfig {
@@ -42,6 +86,9 @@ typedef struct UiConfig {
     int font_size; // widget text size; also the font atlas base resolution
     ButtonConfig button;
     LoadingMenuConfig loading_menu;
+    PauseMenuConfig pause_menu;
+    SlotPickerConfig slot_picker;
+    ConfirmQuitConfig confirm_quit;
 } UiConfig;
 
 // Developer/debug options, mirrored from the `debug` table in config.lua.

@@ -3,6 +3,8 @@
 
 #include <stdbool.h>
 
+#include "raylib.h" // Font, for the loaded UI font handle
+
 #include "config/config.h"
 #include "save/save.h"
 #include "screen/slot_picker.h"
@@ -31,6 +33,10 @@ typedef struct Game {
     SlotPickerMode picker_mode; // what the slot picker is currently for
     SlotInfo slot_infos[SAVE_MAX_SLOTS]; // slot summaries, rebuilt on entering the picker
     int slot_info_count;        // number of valid entries in slot_infos
+    Font ui_font;               // custom UI font handle; valid only if ui_font_loaded
+    bool ui_font_loaded;        // whether we own ui_font and must UnloadFont it at shutdown
+    char toast_text[64];        // transient status/error message (e.g. "SAVE FAILED")
+    double toast_until;         // GetTime() before which the toast is drawn
 } Game;
 
 // Lifecycle: create the window and initialize subsystems.

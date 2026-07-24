@@ -80,6 +80,42 @@ void config_set_defaults(Config *config)
     config->save.slots = 6;
 }
 
+static int clampi(int v, int lo, int hi)
+{
+    if (v < lo) {
+        return lo;
+    }
+    if (v > hi) {
+        return hi;
+    }
+    return v;
+}
+
+// Force values that feed raylib/font APIs into safe ranges, so a malformed
+// config can't crash the window, blow up the font atlas, or wrap a scrim alpha.
+static void clamp_config(Config *config)
+{
+    config->window.width = clampi(config->window.width, 320, 7680);
+    config->window.height = clampi(config->window.height, 240, 4320);
+    config->window.target_fps = clampi(config->window.target_fps, 1, 1000);
+
+    config->ui.font_size = clampi(config->ui.font_size, 8, 256);
+    config->ui.loading_menu.title_size = clampi(config->ui.loading_menu.title_size, 1, 512);
+    config->ui.loading_menu.tagline_size = clampi(config->ui.loading_menu.tagline_size, 1, 512);
+    config->ui.pause_menu.title_size = clampi(config->ui.pause_menu.title_size, 1, 512);
+    config->ui.slot_picker.title_size = clampi(config->ui.slot_picker.title_size, 1, 512);
+    config->ui.confirm_quit.title_size = clampi(config->ui.confirm_quit.title_size, 1, 512);
+    config->ui.confirm_quit.message_size = clampi(config->ui.confirm_quit.message_size, 1, 512);
+
+    // Scrim alphas are cast to unsigned char at the draw site; keep them in range
+    // so an out-of-bounds value can't wrap to a near-transparent scrim.
+    config->ui.pause_menu.scrim_alpha = clampi(config->ui.pause_menu.scrim_alpha, 0, 255);
+    config->ui.confirm_quit.scrim_alpha = clampi(config->ui.confirm_quit.scrim_alpha, 0, 255);
+
+    // Slot count must stay array-safe.
+    config->save.slots = clampi(config->save.slots, 1, SAVE_MAX_SLOTS);
+}
+
 static void fail(char *err, int err_size, const char *msg)
 {
     if (err && err_size > 0) {
@@ -221,12 +257,7 @@ bool config_load(Config *config, const char *path, char *err, int err_size)
     }
     lua_pop(L, 1); // save
 
-    // Clamp slot count to a sane, array-safe range.
-    if (config->save.slots < 1) {
-        config->save.slots = 1;
-    } else if (config->save.slots > SAVE_MAX_SLOTS) {
-        config->save.slots = SAVE_MAX_SLOTS;
-    }
+    clamp_config(config);
 
     lua_close(L);
     return true;

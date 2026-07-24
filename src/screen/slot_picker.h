@@ -24,9 +24,12 @@ typedef enum SlotPickerMode {
 
 // Draw the slot picker and return the slot index chosen this frame, or
 // SLOT_PICKER_NONE / SLOT_PICKER_BACK. `slots` has `count` entries. Content and
-// row geometry come from `cfg`; colors/font from the active style.
+// row geometry come from `cfg`; the Back button uses the shared `button`
+// geometry; colors/font from the active style. Rows are shrunk to fit when there
+// are more slots than fit at the configured height, so nothing renders offscreen.
 // Must be called within a BeginDrawing()/EndDrawing() pass.
 int slot_picker_draw(int screen_width, int screen_height, SlotPickerMode mode,
-                     const SlotPickerConfig *cfg, const SlotInfo *slots, int count);
+                     const SlotPickerConfig *cfg, const ButtonConfig *button,
+                     const SlotInfo *slots, int count);
 
 #endif // VR_SCREEN_SLOT_PICKER_H

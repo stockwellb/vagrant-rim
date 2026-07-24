@@ -6,8 +6,7 @@
 #include "raylib.h" // DirectoryExists / MakeDirectory for the slot directory
 
 #include "lua.h"
-#include "lauxlib.h"
-#include "lualib.h"
+#include "lauxlib.h" // luaL_newstate / luaL_dofile (no lualib: saves run sandboxed)
 
 #include "util/lua_util.h" // shared Lua table field readers
 
@@ -37,12 +36,18 @@ void save_new(GameSave *save)
 
 bool save_write(const GameSave *save, const char *path)
 {
-    FILE *f = fopen(path, "w");
+    // Write to a temp file and atomically rename it over `path`. An interrupted
+    // or failed write then can't truncate or corrupt an existing save — the old
+    // file stays intact until the complete new one replaces it in one step.
+    char tmp[520];
+    snprintf(tmp, sizeof(tmp), "%s.tmp", path);
+
+    FILE *f = fopen(tmp, "w");
     if (!f) {
         return false;
     }
 
-    fprintf(f,
+    int written = fprintf(f,
             "-- Vagrant Rim save file (generated)\n"
             "return {\n"
             "    version = %d,\n"
@@ -56,17 +61,34 @@ bool save_write(const GameSave *save, const char *path)
             save->resource_a, save->resource_b, save->resource_c,
             (double)save->player_x, (double)save->player_y);
 
-    fclose(f);
+    // fclose flushes buffered data, so both it and fprintf must succeed before we
+    // trust the temp file enough to swap it in.
+    if (written < 0) {
+        fclose(f);
+        remove(tmp);
+        return false;
+    }
+    if (fclose(f) != 0) {
+        remove(tmp);
+        return false;
+    }
+    if (rename(tmp, path) != 0) {
+        remove(tmp);
+        return false;
+    }
     return true;
 }
 
 bool save_load(GameSave *save, const char *path)
 {
+    // Load saves in a Lua state with NO standard libraries opened. A save file is
+    // pure data (`return { ... }` of numbers), so it needs none — and since saves
+    // are the kind of file players share, this denies a hand-crafted save any
+    // access to os/io and thus any path to code execution when we run it.
     lua_State *L = luaL_newstate();
     if (!L) {
         return false;
     }
-    luaL_openlibs(L);
 
     if (luaL_dofile(L, path) != LUA_OK || !lua_istable(L, -1)) {
         lua_close(L);

@@ -10,6 +10,7 @@
 #include "screen/slot_picker.h"
 #include "screen/confirm_quit.h"
 #include "save/save.h"
+#include "ui/ui.h"
 
 // Candidate locations for the config file, tried in order. Covers both running
 // from the project root during development and the installed bin/assets layout.
@@ -83,7 +84,7 @@ static void load_gui_style(const Game *game)
 // ourselves because the .rgs cannot supply a usable font here. The atlas is
 // rasterized at max(font_size, title_size) with bilinear filtering so both
 // button text and the large title render smoothly. Must run after InitWindow.
-static void load_ui_font(const Game *game)
+static void load_ui_font(Game *game)
 {
     const char *font = game->config.ui.font_file;
     int size = game->config.ui.font_size;
@@ -105,8 +106,16 @@ static void load_ui_font(const Game *game)
         atlas = game->config.ui.loading_menu.title_size;
     }
     Font f = LoadFontEx(path, atlas, NULL, 0);
+    // On failure LoadFontEx returns the built-in default font; don't adopt (or
+    // later unload) that as if it were ours.
+    if (f.texture.id == 0 || f.texture.id == GetFontDefault().texture.id) {
+        TraceLog(LOG_WARNING, "FONT: failed to load '%s' — using built-in font", path);
+        return;
+    }
     SetTextureFilter(f.texture, TEXTURE_FILTER_BILINEAR);
     GuiSetFont(f);
+    game->ui_font = f;
+    game->ui_font_loaded = true; // remember to UnloadFont it at shutdown
     TraceLog(LOG_INFO, "FONT: loaded '%s' (atlas %dpx, text %dpx)", path, atlas, size);
 }
 
@@ -124,6 +133,9 @@ void game_init(Game *game)
     game->confirm_quit = false;
     game->picker_mode = SLOT_PICKER_LOAD;
     game->slot_info_count = 0;
+    game->ui_font_loaded = false;
+    game->toast_text[0] = '\0';
+    game->toast_until = 0.0;
 
     InitWindow(game->screen_width, game->screen_height, game->config.window.title);
     SetTargetFPS(game->config.window.target_fps);
@@ -151,6 +163,15 @@ void game_update(Game *game)
     // Simulation updates land here as subsystems come online.
 }
 
+// Show a brief status message centered near the bottom of the screen. Used to
+// surface outcomes the player would otherwise not see (failed save, no save to
+// continue, unreadable slot).
+static void game_toast(Game *game, const char *text)
+{
+    snprintf(game->toast_text, sizeof(game->toast_text), "%s", text);
+    game->toast_until = GetTime() + 2.5;
+}
+
 // Persist the active save to its slot and note the time for the confirmation.
 static void save_game(Game *game)
 {
@@ -160,6 +181,7 @@ static void save_game(Game *game)
         game->last_save_time = GetTime();
         TraceLog(LOG_INFO, "SAVE: wrote slot %d", game->active_slot);
     } else {
+        game_toast(game, "SAVE FAILED"); // don't let a failed write look like success
         TraceLog(LOG_WARNING, "SAVE: failed to write slot %d", game->active_slot);
     }
 }
@@ -209,12 +231,17 @@ static void handle_loading_menu_action(Game *game, LoadingMenuAction action)
 {
     switch (action) {
         case LOADING_MENU_CONTINUE: {
-            // Quick-load the most-recently-saved slot.
+            // Quick-load the most-recently-saved slot. `has_save` only checks that
+            // a slot file exists, so a present-but-unreadable save can still land
+            // here with nothing loadable — tell the player rather than no-op.
             int slot = save_most_recent_slot(game->config.save.slots);
             if (slot >= 0 && save_load_slot(&game->save, slot)) {
                 game->active_slot = slot;
                 game->screen = SCREEN_PLAYING;
                 TraceLog(LOG_INFO, "CONTINUE: loaded slot %d", slot);
+            } else {
+                game_toast(game, "NO SAVE TO CONTINUE");
+                TraceLog(LOG_WARNING, "CONTINUE: no loadable save found");
             }
             break;
         }
@@ -253,6 +280,7 @@ static void handle_slot_picker(Game *game, int chosen)
             game->screen = SCREEN_PLAYING;
             TraceLog(LOG_INFO, "LOAD: loaded slot %d", chosen);
         } else {
+            game_toast(game, "SAVE UNREADABLE");
             TraceLog(LOG_WARNING, "LOAD: failed to load slot %d", chosen);
         }
     } else { // SLOT_PICKER_NEW
@@ -359,10 +387,18 @@ void game_draw(Game *game)
         case SCREEN_SLOT_PICKER: {
             int chosen = slot_picker_draw(game->screen_width, game->screen_height,
                                           game->picker_mode, &game->config.ui.slot_picker,
-                                          game->slot_infos, game->slot_info_count);
+                                          &game->config.ui.button, game->slot_infos,
+                                          game->slot_info_count);
             handle_slot_picker(game, chosen);
             break;
         }
+    }
+
+    // Transient status/error toast, drawn over whatever screen is active.
+    if (game->toast_text[0] != '\0' && GetTime() < game->toast_until) {
+        ui_text_centered(game->toast_text, 0.0f, (float)game->screen_width,
+                         (float)game->screen_height - 80.0f, 22.0f,
+                         (Color){ 220, 90, 70, 255 });
     }
 
     if (game->config.debug.show_fps) {
@@ -379,6 +415,8 @@ bool game_should_close(const Game *game)
 
 void game_shutdown(Game *game)
 {
-    (void)game;
+    if (game->ui_font_loaded) {
+        UnloadFont(game->ui_font); // release the atlas texture we own
+    }
     CloseWindow();
 }

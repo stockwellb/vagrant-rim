@@ -1,6 +1,6 @@
 # vagrant-rim
 
-A space scavenger game. See [GOALS.md](GOALS.md) for the design vision.
+A space scavenger game. See [GAME_PLAY.md](GAME_PLAY.md) for the design vision — play mechanics and HUD concepts.
 
 ## Tech stack
 

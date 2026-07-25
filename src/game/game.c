@@ -16,6 +16,8 @@
 #include "ui/ui.h"
 #include "util/assets.h"
 
+#include "game/game_internal.h" // declarations for the handlers below (tests call them)
+
 // Candidate locations for the config file, tried in order. Covers both running
 // from the project root during development and the installed bin/assets layout.
 static const char *kConfigPaths[] = {
@@ -292,7 +294,7 @@ static void enter_settings(Game *game, ScreenId from)
 }
 
 // Handle an action emitted by the pause menu.
-static void handle_pause_action(Game *game, PauseMenuAction action)
+void handle_pause_action(Game *game, PauseMenuAction action)
 {
     switch (action) {
         case PAUSE_RESUME:
@@ -314,7 +316,7 @@ static void handle_pause_action(Game *game, PauseMenuAction action)
 
 // Handle an action emitted by the settings screen: on Back, persist the mixer
 // state and return to whichever screen opened settings.
-static void handle_settings_action(Game *game, SettingsMenuAction action)
+void handle_settings_action(Game *game, SettingsMenuAction action)
 {
     if (action == SETTINGS_MENU_BACK) {
         save_settings();
@@ -324,7 +326,7 @@ static void handle_settings_action(Game *game, SettingsMenuAction action)
 
 // Handle an action emitted by the quit-confirmation modal. Both outcomes return
 // to the loading menu; only the confirm path saves first.
-static void handle_confirm_quit(Game *game, ConfirmQuitAction action)
+void handle_confirm_quit(Game *game, ConfirmQuitAction action)
 {
     switch (action) {
         case CONFIRM_QUIT_SAVE:
@@ -348,7 +350,7 @@ static void handle_confirm_quit(Game *game, ConfirmQuitAction action)
 static void enter_slot_picker(Game *game, SlotPickerMode mode);
 
 // Handle an action emitted by the loading menu.
-static void handle_loading_menu_action(Game *game, LoadingMenuAction action)
+void handle_loading_menu_action(Game *game, LoadingMenuAction action)
 {
     switch (action) {
         case LOADING_MENU_CONTINUE: {
@@ -387,7 +389,7 @@ static void handle_loading_menu_action(Game *game, LoadingMenuAction action)
 }
 
 // Handle the slot chosen (or Back) in the slot picker.
-static void handle_slot_picker(Game *game, int chosen)
+void handle_slot_picker(Game *game, int chosen)
 {
     if (chosen == SLOT_PICKER_NONE) {
         return;

@@ -72,7 +72,8 @@ target_end()
 
 -- One binary per test file. Add a new suite by dropping test/test_<name>.c and
 -- appending "<name>" here.
-for _, name in ipairs({"mathx", "save", "menunav", "config", "settings", "atomic_file"}) do
+for _, name in ipairs({"mathx", "save", "menunav", "config", "settings", "atomic_file",
+                       "lua_util", "assets", "audio", "game_flow"}) do
     target("test_" .. name)
         set_kind("binary")
         set_default(false)

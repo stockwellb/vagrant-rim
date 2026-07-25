@@ -5,7 +5,8 @@
 //
 // main() chdir's into a fresh temp directory before running, so the slot-based
 // tests write their "saves/" tree there instead of polluting the real project
-// saves. Order matters: the empty-state checks run before any slot is written.
+// saves. Each slot test wipes that tree first (reset_saves), so they're
+// self-contained and independent of run order.
 #include "unity.h"
 
 #include <stdio.h>
@@ -17,6 +18,13 @@
 
 void setUp(void) {}
 void tearDown(void) {}
+
+// Wipe the on-disk saves/ tree so a slot test starts from a known empty state.
+// The CWD is a throwaway mkdtemp dir (see main), so this only touches scratch.
+static void reset_saves(void)
+{
+    (void)system("rm -rf saves");
+}
 
 // --- Low-level path API (CWD-independent) -----------------------------------
 
@@ -84,17 +92,19 @@ static void test_load_non_table_returns_false(void)
 
 static void test_most_recent_slot_empty_returns_negative_one(void)
 {
-    // Runs before any slot is written, so no save files exist yet.
+    reset_saves(); // no save files exist
     TEST_ASSERT_EQUAL_INT(-1, save_most_recent_slot(6));
 }
 
 static void test_any_slot_used_empty_is_false(void)
 {
+    reset_saves();
     TEST_ASSERT_FALSE(save_any_slot_used(6));
 }
 
 static void test_most_recent_slot_picks_newest_saved_at(void)
 {
+    reset_saves();
     GameSave s;
     save_new(&s);
 
@@ -110,7 +120,10 @@ static void test_most_recent_slot_picks_newest_saved_at(void)
 
 static void test_any_slot_used_true_after_write(void)
 {
-    // Slots were written by the previous test.
+    reset_saves();
+    GameSave s;
+    save_new(&s);
+    TEST_ASSERT_TRUE(save_write_slot(&s, 0));
     TEST_ASSERT_TRUE(save_any_slot_used(6));
 }
 
@@ -125,7 +138,7 @@ int main(void)
     }
 
     UNITY_BEGIN();
-    // Empty-state checks first (before any slot file is written).
+    // Empty-state checks (each resets saves/ first).
     RUN_TEST(test_most_recent_slot_empty_returns_negative_one);
     RUN_TEST(test_any_slot_used_empty_is_false);
     // Low-level round-trip and failure handling.
@@ -133,7 +146,7 @@ int main(void)
     RUN_TEST(test_load_missing_file_returns_false);
     RUN_TEST(test_load_corrupt_file_leaves_out_untouched);
     RUN_TEST(test_load_non_table_returns_false);
-    // Slot scanning (writes into saves/ under the temp CWD).
+    // Slot scanning (each resets + writes its own saves/ under the temp CWD).
     RUN_TEST(test_most_recent_slot_picks_newest_saved_at);
     RUN_TEST(test_any_slot_used_true_after_write);
     return UNITY_END();

@@ -9,13 +9,14 @@ typedef enum ConfirmQuitAction {
     CONFIRM_QUIT_NONE = 0,
     CONFIRM_QUIT_SAVE,    // confirm: save, then quit to the menu
     CONFIRM_QUIT_DISCARD, // cancel: quit to the menu without saving
+    CONFIRM_QUIT_CANCEL,  // back out of the prompt, return to the pause menu
 } ConfirmQuitAction;
 
 // Draw the "save before quitting?" modal (a dim scrim, a bordered box, a title,
 // a message, and confirm/cancel buttons) over the frozen scene and return the
 // action chosen this frame. Content and box geometry come from `cfg`; button
-// height from `button`; colors/font from the active style. (Dismissing via Esc
-// is handled by the caller, not this screen.)
+// height from `button`; colors/font from the active style. Esc / gamepad-B backs
+// out of the prompt as CONFIRM_QUIT_CANCEL, like every other menu screen.
 // Must be called within a BeginDrawing()/EndDrawing() pass.
 ConfirmQuitAction confirm_quit_draw(MenuNav *nav, int screen_width, int screen_height,
                                     const ConfirmQuitConfig *cfg,

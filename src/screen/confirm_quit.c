@@ -52,5 +52,11 @@ ConfirmQuitAction confirm_quit_draw(MenuNav *nav, int screen_width, int screen_h
     }
 
     ui_menu_nav_end(nav);
+
+    // Esc / gamepad-B backs out of the prompt (to the pause menu), matching the
+    // Back/cancel convention used by the slot picker and settings screens.
+    if (nav->cancel) {
+        action = CONFIRM_QUIT_CANCEL;
+    }
     return action;
 }

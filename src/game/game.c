@@ -240,20 +240,22 @@ void game_update(Game *game)
         }
     }
 
-    // Esc / gamepad-Start opens the pause overlay while playing; Esc / Start / B
-    // closes it (or dismisses the quit prompt) once open.
+    // The pause key toggles PLAYING <-> PAUSE. This one input spans two screens,
+    // so it's resolved here (atomically, via if/else-if) rather than in a screen's
+    // draw — otherwise the same Esc press that opened the overlay would be seen
+    // again by pause_menu_draw and close it the same frame. Every *other* screen
+    // reports its own Back/cancel through its returned action instead (including
+    // the quit prompt, which owns Esc/B via CONFIRM_QUIT_CANCEL).
     if (game->screen == SCREEN_PLAYING) {
         if (ui_nav_menu_pressed()) {
             game->screen = SCREEN_PAUSE;
             game->confirm_quit = false;
         }
     } else if (game->screen == SCREEN_PAUSE) {
-        if (ui_nav_menu_pressed() || ui_nav_cancel_pressed()) {
-            if (game->confirm_quit) {
-                game->confirm_quit = false; // back out of the prompt to the pause menu
-            } else {
-                game->screen = SCREEN_PLAYING;
-            }
+        // Resume only from the pause menu itself; while the quit prompt is up it
+        // owns Esc/B (see confirm_quit_draw), so the toggle stands down.
+        if (!game->confirm_quit && (ui_nav_menu_pressed() || ui_nav_cancel_pressed())) {
+            game->screen = SCREEN_PLAYING;
         }
     }
     // Simulation updates land here as subsystems come online.
@@ -333,6 +335,9 @@ static void handle_confirm_quit(Game *game, ConfirmQuitAction action)
         case CONFIRM_QUIT_DISCARD:
             game->confirm_quit = false;
             game->screen = SCREEN_LOADING_MENU;
+            break;
+        case CONFIRM_QUIT_CANCEL:
+            game->confirm_quit = false; // back out to the pause menu, staying in-game
             break;
         case CONFIRM_QUIT_NONE:
             break;
@@ -497,7 +502,7 @@ void game_draw(Game *game)
         case SCREEN_PAUSE: {
             draw_playing(game); // frozen scene behind the overlay
             if (game->confirm_quit) {
-                // Esc cancels (handled in game_update)
+                // Esc / gamepad-B backs out via CONFIRM_QUIT_CANCEL (below).
                 ConfirmQuitAction action = confirm_quit_draw(
                     &game->nav, game->screen_width, game->screen_height,
                     &game->config.ui.confirm_quit, &game->config.ui.button);

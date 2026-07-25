@@ -7,6 +7,9 @@
 // Clamp v to [lo, hi].
 float clampf(float v, float lo, float hi);
 
+// Clamp v to [lo, hi] (integer) — sizes, counts, and other bounded ints.
+int clampi(int v, int lo, int hi);
+
 // Clamp v to [0, 1] — volumes and other normalized fractions.
 float clamp01(float v);
 

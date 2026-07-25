@@ -8,7 +8,7 @@
 #include "lualib.h"
 
 #include "util/lua_util.h" // shared Lua table field readers
-#include "util/mathx.h"    // clampf
+#include "util/mathx.h"    // clampi / clampf
 #include "save/save.h"     // SAVE_MAX_SLOTS
 
 void config_set_defaults(Config *config)
@@ -102,17 +102,6 @@ void config_set_defaults(Config *config)
 
     // Save
     config->save.slots = 6;
-}
-
-static int clampi(int v, int lo, int hi)
-{
-    if (v < lo) {
-        return lo;
-    }
-    if (v > hi) {
-        return hi;
-    }
-    return v;
 }
 
 // Force values that feed raylib/font APIs into safe ranges, so a malformed

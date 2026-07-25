@@ -230,6 +230,16 @@ void ui_menu_nav_begin_mode(MenuNav *nav, int count, MenuNavMode mode)
         }
         nav->adjust = adjust_repeat_step(adir, &nav->adjust_held, &nav->adjust_timer,
                                          GetFrameTime());
+        // D-pad left/right also adjust the focused slider. The native (macOS) shim
+        // reports these as edges, not a held level, so they can't feed the
+        // auto-repeat timer — each tap is one step, matching how the D-pad moves
+        // focus one step at a time in bidirectional menus. Only when the timer
+        // isn't already stepping, so a held key/stick isn't doubled by a stray tap.
+        if (nav->adjust == 0) {
+            nav->adjust = pad_pressed(GAMEPAD_BUTTON_LEFT_FACE_LEFT)    ? -1
+                          : pad_pressed(GAMEPAD_BUTTON_LEFT_FACE_RIGHT) ? 1
+                                                                        : 0;
+        }
     } else {
         // Any of the four directions moves focus; vertical wins when both fire.
         int hstep = left_pressed() ? -1 : right_pressed() ? 1 : 0;

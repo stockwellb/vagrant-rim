@@ -72,7 +72,7 @@ target_end()
 
 -- One binary per test file. Add a new suite by dropping test/test_<name>.c and
 -- appending "<name>" here.
-for _, name in ipairs({"mathx", "save"}) do
+for _, name in ipairs({"mathx", "save", "menunav", "config", "settings", "atomic_file"}) do
     target("test_" .. name)
         set_kind("binary")
         set_default(false)

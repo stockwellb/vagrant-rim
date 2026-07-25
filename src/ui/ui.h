@@ -40,11 +40,25 @@ typedef struct MenuNav {
     int focus;                         // index of the currently focused item
     int count;                         // items registered this frame (set by begin)
     int pending_dir;                   // -1 up / +1 down, applied in end()
+    int adjust;                        // -1 left / +1 right this frame (vertical mode)
     bool activate;                     // Enter / gamepad-A fired this frame
     bool cancel;                       // Esc / gamepad-B fired this frame
-    bool stick_latched;                // left stick held past the step threshold
+    bool adjust_consumed;              // a focused slider used this frame's adjust
+    bool stick_latched;                // left stick Y held past the step threshold
+    bool hstick_latched;               // left stick X held past the step threshold (bidir focus)
+    bool adjust_held;                  // an adjust direction is currently held (vertical mode)
+    float adjust_timer;                // countdown to the next adjust auto-repeat step
     bool enabled[UI_MENU_MAX_ITEMS];   // per-item enabled, recorded during draw
 } MenuNav;
+
+// How a menu interprets left/right. BIDIRECTIONAL (the default) treats all four
+// directions as focus movement — right for plain button lists. VERTICAL confines
+// focus movement to up/down and instead reports left/right as `nav->adjust`, so a
+// screen with sliders can adjust the focused value without changing focus.
+typedef enum MenuNavMode {
+    MENU_NAV_BIDIRECTIONAL = 0,
+    MENU_NAV_VERTICAL,
+} MenuNavMode;
 
 // Reset focus to the top and clear latched state; call on every screen change so
 // a new menu opens with its first item focused rather than a stale index.
@@ -52,8 +66,13 @@ void ui_menu_nav_reset(MenuNav *nav);
 
 // Read this frame's navigation input for a menu of `count` items. Latches the
 // move direction, activate, and cancel edges; actual focus movement happens in
-// ui_menu_nav_end once the per-item enabled state is known.
+// ui_menu_nav_end once the per-item enabled state is known. This is
+// ui_menu_nav_begin_mode with MENU_NAV_BIDIRECTIONAL.
 void ui_menu_nav_begin(MenuNav *nav, int count);
+
+// As ui_menu_nav_begin, but `mode` selects how left/right are interpreted (see
+// MenuNavMode). Use MENU_NAV_VERTICAL for screens containing sliders.
+void ui_menu_nav_begin_mode(MenuNav *nav, int count, MenuNavMode mode);
 
 // Draw one focus-aware button. Mouse hover claims focus (so pointer and
 // keyboard never disagree); the focused item draws highlighted. Returns true if
@@ -61,6 +80,13 @@ void ui_menu_nav_begin(MenuNav *nav, int count);
 // dimmed and are skipped by keyboard/gamepad traversal.
 bool ui_menu_button(MenuNav *nav, int index, Rectangle bounds, const char *text,
                     bool enabled);
+
+// Draw one focus-aware labeled slider bar (value 0..1) as menu item `index`.
+// Mouse drags the bar; when focused, left/right (nav->adjust) nudge the value by
+// `step` with an audible tick. Returns the updated value. Use with a nav opened
+// in MENU_NAV_VERTICAL mode so left/right adjust rather than move focus.
+float ui_menu_slider(MenuNav *nav, int index, Rectangle bounds, const char *label,
+                     float value, float step);
 
 // Apply the latched move direction, wrapping around the list and skipping
 // disabled items, then snap focus onto an enabled item if it isn't on one.

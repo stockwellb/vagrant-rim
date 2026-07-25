@@ -13,6 +13,7 @@ typedef enum LoadingMenuAction {
     LOADING_MENU_CONTINUE,
     LOADING_MENU_LOAD,
     LOADING_MENU_NEW,
+    LOADING_MENU_SETTINGS,
     LOADING_MENU_EXIT,
 } LoadingMenuAction;
 

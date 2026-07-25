@@ -11,6 +11,7 @@ typedef enum PauseMenuAction {
     PAUSE_NONE = 0,
     PAUSE_RESUME,
     PAUSE_SAVE,
+    PAUSE_SETTINGS,
     PAUSE_QUIT, // quit to the main menu
 } PauseMenuAction;
 

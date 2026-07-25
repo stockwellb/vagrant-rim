@@ -16,6 +16,7 @@ typedef enum ScreenId {
     SCREEN_PLAYING,
     SCREEN_PAUSE,       // pause overlay drawn on top of the frozen play scene
     SCREEN_SLOT_PICKER, // choose a slot to load into or start a new game in
+    SCREEN_SETTINGS,    // audio/volume settings; returns to whatever opened it
 } ScreenId;
 
 // Top-level game state. Individual subsystems (ship, world, economy, ...)
@@ -41,6 +42,7 @@ typedef struct Game {
     MenuNav nav;                // keyboard/gamepad focus state for the active menu
     ScreenId prev_screen;       // screen drawn last frame, to detect transitions
     bool prev_confirm;          // confirm_quit state last frame (pause vs. modal)
+    ScreenId settings_from;     // screen to return to when leaving SCREEN_SETTINGS
 } Game;
 
 // Lifecycle: create the window and initialize subsystems.

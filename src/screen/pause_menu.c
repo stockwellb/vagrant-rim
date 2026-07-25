@@ -9,8 +9,8 @@ PauseMenuAction pause_menu_draw(MenuNav *nav, int screen_width, int screen_heigh
                                 const PauseMenuConfig *menu, const ButtonConfig *button,
                                 bool recently_saved)
 {
-    // Resume (0), Save (1), Quit (2).
-    ui_menu_nav_begin(nav, 3);
+    // Resume (0), Save (1), Settings (2), Quit (3).
+    ui_menu_nav_begin(nav, 4);
 
     // Dim the frozen play scene behind the menu.
     DrawRectangle(0, 0, screen_width, screen_height,
@@ -47,7 +47,12 @@ PauseMenuAction pause_menu_draw(MenuNav *nav, int screen_width, int screen_heigh
     }
 
     y += bh + gap;
-    if (ui_menu_button(nav, 2, (Rectangle){ x, y, bw, bh }, menu->quit_text, true)) {
+    if (ui_menu_button(nav, 2, (Rectangle){ x, y, bw, bh }, menu->settings_text, true)) {
+        action = PAUSE_SETTINGS;
+    }
+
+    y += bh + gap;
+    if (ui_menu_button(nav, 3, (Rectangle){ x, y, bw, bh }, menu->quit_text, true)) {
         action = PAUSE_QUIT;
     }
 

@@ -9,8 +9,8 @@ LoadingMenuAction loading_menu_draw(MenuNav *nav, int screen_width, int screen_h
                                     bool has_save, const LoadingMenuConfig *menu,
                                     const ButtonConfig *button)
 {
-    // Continue (0), Load (1), New (2), Exit (3).
-    ui_menu_nav_begin(nav, 4);
+    // Continue (0), Load (1), New (2), Settings (3), Exit (4).
+    ui_menu_nav_begin(nav, 5);
 
     // Title/tagline share the loaded UI font so the whole screen is consistent.
     // Title uses the style's normal text color; the tagline is that same color
@@ -53,7 +53,12 @@ LoadingMenuAction loading_menu_draw(MenuNav *nav, int screen_width, int screen_h
     }
 
     y += btn_h + gap;
-    if (ui_menu_button(nav, 3, (Rectangle){ x, y, btn_w, btn_h }, menu->exit_text, true)) {
+    if (ui_menu_button(nav, 3, (Rectangle){ x, y, btn_w, btn_h }, menu->settings_text, true)) {
+        action = LOADING_MENU_SETTINGS;
+    }
+
+    y += btn_h + gap;
+    if (ui_menu_button(nav, 4, (Rectangle){ x, y, btn_w, btn_h }, menu->exit_text, true)) {
         action = LOADING_MENU_EXIT;
     }
 

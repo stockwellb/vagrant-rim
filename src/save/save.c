@@ -8,7 +8,8 @@
 #include "lua.h"
 #include "lauxlib.h" // luaL_newstate / luaL_dofile (no lualib: saves run sandboxed)
 
-#include "util/lua_util.h" // shared Lua table field readers
+#include "util/atomic_file.h" // shared temp-file + atomic-rename writer
+#include "util/lua_util.h"    // shared Lua table field readers
 
 // Save directory, resolved relative to the working directory (the project root
 // during development via set_rundir).
@@ -36,18 +37,12 @@ void save_new(GameSave *save)
 
 bool save_write(const GameSave *save, const char *path)
 {
-    // Write to a temp file and atomically rename it over `path`. An interrupted
-    // or failed write then can't truncate or corrupt an existing save — the old
-    // file stays intact until the complete new one replaces it in one step.
-    char tmp[520];
-    snprintf(tmp, sizeof(tmp), "%s.tmp", path);
-
-    FILE *f = fopen(tmp, "w");
-    if (!f) {
-        return false;
-    }
-
-    int written = fprintf(f,
+    // Format the save, then hand it to the shared temp-file + atomic-rename
+    // writer: an interrupted or failed write can't truncate or corrupt an
+    // existing save — the old file stays intact until the complete new one
+    // replaces it in one step.
+    char buf[512];
+    int n = snprintf(buf, sizeof(buf),
             "-- Vagrant Rim save file (generated)\n"
             "return {\n"
             "    version = %d,\n"
@@ -60,23 +55,11 @@ bool save_write(const GameSave *save, const char *path)
             save->version, save->created_at, save->saved_at, save->fuel,
             save->resource_a, save->resource_b, save->resource_c,
             (double)save->player_x, (double)save->player_y);
+    if (n < 0 || (size_t)n >= sizeof(buf)) {
+        return false; // formatted save didn't fit — refuse rather than truncate
+    }
 
-    // fclose flushes buffered data, so both it and fprintf must succeed before we
-    // trust the temp file enough to swap it in.
-    if (written < 0) {
-        fclose(f);
-        remove(tmp);
-        return false;
-    }
-    if (fclose(f) != 0) {
-        remove(tmp);
-        return false;
-    }
-    if (rename(tmp, path) != 0) {
-        remove(tmp);
-        return false;
-    }
-    return true;
+    return atomic_write(path, buf);
 }
 
 bool save_load(GameSave *save, const char *path)

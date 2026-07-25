@@ -9,8 +9,12 @@
 #include "screen/pause_menu.h"
 #include "screen/slot_picker.h"
 #include "screen/confirm_quit.h"
+#include "screen/settings_menu.h"
+#include "audio/audio.h"
 #include "save/save.h"
+#include "settings/settings.h"
 #include "ui/ui.h"
+#include "util/assets.h"
 
 // Candidate locations for the config file, tried in order. Covers both running
 // from the project root during development and the installed bin/assets layout.
@@ -20,21 +24,35 @@ static const char *kConfigPaths[] = {
     "config.lua",
 };
 
-// Asset directory prefixes tried when resolving a relative asset path. Mirrors
-// the layout assumptions in kConfigPaths (dev root vs. installed bin/assets).
-static const char *kAssetPrefixes[] = { "assets/", "bin/assets/", "" };
-
-// Resolve a relative asset path against the known prefixes into `out`.
-// Returns true and fills `out` if an existing file is found.
-static bool resolve_asset(const char *rel, char *out, int out_size)
+// Overlay any persisted audio settings onto the config defaults, so the player's
+// last-chosen volumes/mute win over config.lua. Done before audio_init so the
+// device starts at the right levels.
+static void load_settings(Game *game)
 {
-    for (int i = 0; i < (int)(sizeof(kAssetPrefixes) / sizeof(kAssetPrefixes[0])); i++) {
-        snprintf(out, (size_t)out_size, "%s%s", kAssetPrefixes[i], rel);
-        if (FileExists(out)) {
-            return true;
-        }
+    Settings s = {
+        .music_volume = game->config.audio.music_volume,
+        .sfx_volume = game->config.audio.sfx_volume,
+        .muted = game->config.audio.muted,
+    };
+    if (settings_load(&s)) {
+        game->config.audio.music_volume = s.music_volume;
+        game->config.audio.sfx_volume = s.sfx_volume;
+        game->config.audio.muted = s.muted;
+        TraceLog(LOG_INFO, "SETTINGS: loaded persisted audio preferences");
     }
-    return false;
+}
+
+// Persist the current mixer state (called when leaving the settings screen).
+static void save_settings(void)
+{
+    Settings s = {
+        .music_volume = audio_music_volume(),
+        .sfx_volume = audio_sfx_volume(),
+        .muted = audio_muted(),
+    };
+    if (!settings_save(&s)) {
+        TraceLog(LOG_WARNING, "SETTINGS: failed to write settings file");
+    }
 }
 
 static void load_config(Game *game)
@@ -66,7 +84,7 @@ static void load_gui_style(const Game *game)
     }
 
     char path[512];
-    if (!resolve_asset(style, path, sizeof(path))) {
+    if (!asset_resolve(style, path, sizeof(path))) {
         TraceLog(LOG_WARNING, "STYLE: '%s' not found — using raygui default", style);
         return;
     }
@@ -89,7 +107,7 @@ static void load_gui_style(const Game *game)
 static void load_gamepad_mappings(void)
 {
     char path[512];
-    if (!resolve_asset("gamecontrollerdb.txt", path, sizeof(path))) {
+    if (!asset_resolve("gamecontrollerdb.txt", path, sizeof(path))) {
         TraceLog(LOG_WARNING, "GAMEPAD: gamecontrollerdb.txt not found — "
                               "controllers may not register any input");
         return;
@@ -129,7 +147,7 @@ static void load_ui_font(Game *game)
     }
 
     char path[512];
-    if (!resolve_asset(font, path, sizeof(path))) {
+    if (!asset_resolve(font, path, sizeof(path))) {
         TraceLog(LOG_WARNING, "FONT: '%s' not found — using built-in font", font);
         return;
     }
@@ -156,6 +174,7 @@ static void load_ui_font(Game *game)
 void game_init(Game *game)
 {
     load_config(game);
+    load_settings(game); // persisted audio prefs override config.lua defaults
 
     game->screen_width = game->config.window.width;
     game->screen_height = game->config.window.height;
@@ -173,19 +192,53 @@ void game_init(Game *game)
     ui_menu_nav_reset(&game->nav);
     game->prev_screen = game->screen;
     game->prev_confirm = game->confirm_quit;
+    game->settings_from = SCREEN_LOADING_MENU;
 
     InitWindow(game->screen_width, game->screen_height, game->config.window.title);
     SetTargetFPS(game->config.window.target_fps);
     SetExitKey(KEY_NULL); // Esc is our pause toggle, not a window-quit
 
+    // Borderless fullscreen at the monitor's native resolution (no video-mode
+    // change, alt-tab friendly). Adopt the resulting draw size so every screen's
+    // centered layout fills the display instead of the initial windowed size.
+    if (game->config.window.fullscreen) {
+        ToggleBorderlessWindowed();
+        game->screen_width = GetScreenWidth();
+        game->screen_height = GetScreenHeight();
+        // The window still needs pulling to the monitor's top-left (macOS drops
+        // it below the menu bar), but game_update re-asserts that every frame, so
+        // there's no separate placement fixup here.
+    }
+
     load_gui_style(game);
     load_ui_font(game);
     load_gamepad_mappings(); // after InitWindow — see function comment
+    audio_init(&game->config.audio); // opens the audio device; starts music
 }
 
 void game_update(Game *game)
 {
-    ui_input_poll(); // refresh controller state once per frame before nav queries
+    ui_input_poll();  // refresh controller state once per frame before nav queries
+    audio_update();   // keep the music stream fed
+
+    // Track the real drawable size every frame. Borderless-fullscreen resizes
+    // apply a frame or two after the toggle on macOS, so reading it once at init
+    // isn't enough — this keeps every screen's centered layout matched to the
+    // actual window (and handles later resizes / monitor moves for free).
+    game->screen_width = GetScreenWidth();
+    game->screen_height = GetScreenHeight();
+
+    // Keep the borderless window pinned to the monitor's top-left. macOS applies
+    // the post-toggle placement a frame or two late and can re-drop the window
+    // into the work area (below the menu bar); correct it whenever it drifts.
+    // The guard makes this a no-op once the origin is right, so no per-frame fight.
+    if (game->config.window.fullscreen) {
+        Vector2 mpos = GetMonitorPosition(GetCurrentMonitor());
+        Vector2 wpos = GetWindowPosition();
+        if ((int)wpos.x != (int)mpos.x || (int)wpos.y != (int)mpos.y) {
+            SetWindowPosition((int)mpos.x, (int)mpos.y);
+        }
+    }
 
     // Esc / gamepad-Start opens the pause overlay while playing; Esc / Start / B
     // closes it (or dismisses the quit prompt) once open.
@@ -229,6 +282,13 @@ static void save_game(Game *game)
     }
 }
 
+// Open the settings screen, remembering which screen to return to on Back.
+static void enter_settings(Game *game, ScreenId from)
+{
+    game->settings_from = from;
+    game->screen = SCREEN_SETTINGS;
+}
+
 // Handle an action emitted by the pause menu.
 static void handle_pause_action(Game *game, PauseMenuAction action)
 {
@@ -239,11 +299,24 @@ static void handle_pause_action(Game *game, PauseMenuAction action)
         case PAUSE_SAVE:
             save_game(game);
             break;
+        case PAUSE_SETTINGS:
+            enter_settings(game, SCREEN_PAUSE);
+            break;
         case PAUSE_QUIT:
             game->confirm_quit = true; // ask whether to save before leaving
             break;
         case PAUSE_NONE:
             break;
+    }
+}
+
+// Handle an action emitted by the settings screen: on Back, persist the mixer
+// state and return to whichever screen opened settings.
+static void handle_settings_action(Game *game, SettingsMenuAction action)
+{
+    if (action == SETTINGS_MENU_BACK) {
+        save_settings();
+        game->screen = game->settings_from;
     }
 }
 
@@ -295,6 +368,9 @@ static void handle_loading_menu_action(Game *game, LoadingMenuAction action)
         case LOADING_MENU_NEW:
             // Choose a slot to start a new game in (so New can't clobber blindly).
             enter_slot_picker(game, SLOT_PICKER_NEW);
+            break;
+        case LOADING_MENU_SETTINGS:
+            enter_settings(game, SCREEN_LOADING_MENU);
             break;
         case LOADING_MENU_EXIT:
             TraceLog(LOG_INFO, "LOADING_MENU: exit");
@@ -445,6 +521,13 @@ void game_draw(Game *game)
             handle_slot_picker(game, chosen);
             break;
         }
+        case SCREEN_SETTINGS: {
+            SettingsMenuAction action =
+                settings_menu_draw(&game->nav, game->screen_width, game->screen_height,
+                                   &game->config.ui.settings_menu, &game->config.ui.button);
+            handle_settings_action(game, action);
+            break;
+        }
     }
 
     // Transient status/error toast, drawn over whatever screen is active.
@@ -468,6 +551,7 @@ bool game_should_close(const Game *game)
 
 void game_shutdown(Game *game)
 {
+    audio_shutdown(); // release sounds/music and close the audio device
     if (game->ui_font_loaded) {
         UnloadFont(game->ui_font); // release the atlas texture we own
     }

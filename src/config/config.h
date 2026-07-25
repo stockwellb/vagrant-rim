@@ -5,10 +5,11 @@
 
 // Window configuration, mirrored from the `window` table in config.lua.
 typedef struct WindowConfig {
-    int width;
+    int width;         // windowed size; also the initial size before going fullscreen
     int height;
     char title[128];
     int target_fps;
+    bool fullscreen;   // start in borderless fullscreen at the monitor's resolution
 } WindowConfig;
 
 // Shared button layout, from `ui.button` in config.lua. Reused by every menu.
@@ -31,6 +32,7 @@ typedef struct LoadingMenuConfig {
     char continue_text[32];
     char load_text[32];
     char new_text[32];
+    char settings_text[32];
     char exit_text[32];
 } LoadingMenuConfig;
 
@@ -40,6 +42,7 @@ typedef struct PauseMenuConfig {
     int title_size;
     char resume_text[32];
     char save_text[32];
+    char settings_text[32];
     char quit_text[32];
     char saved_notice[32];        // brief confirmation shown next to Save after a write
     float saved_notice_seconds;   // how long that confirmation stays up
@@ -73,6 +76,19 @@ typedef struct SlotPickerConfig {
     int row_gap;
 } SlotPickerConfig;
 
+// Settings screen configuration, from `ui.settings_menu` in config.lua. Holds
+// the screen title and the row labels; the values themselves are audio state.
+typedef struct SettingsMenuConfig {
+    char title_text[128];
+    int title_size;
+    char music_label[32];  // music-volume row label
+    char sfx_label[32];    // sfx-volume row label
+    char mute_label[32];   // mute row label (state appended: on/off text)
+    char mute_on_text[16]; // shown when muted
+    char mute_off_text[16];// shown when not muted
+    char back_text[32];
+} SettingsMenuConfig;
+
 // UI configuration, mirrored from the `ui` table in config.lua.
 typedef struct UiConfig {
     // raygui style file (.rgs) authored in rGuiStyler, resolved against the
@@ -89,7 +105,21 @@ typedef struct UiConfig {
     PauseMenuConfig pause_menu;
     SlotPickerConfig slot_picker;
     ConfirmQuitConfig confirm_quit;
+    SettingsMenuConfig settings_menu;
 } UiConfig;
+
+// Audio options, mirrored from the `audio` table in config.lua. Volumes are
+// 0..1. File paths resolve against the asset search paths; an empty or missing
+// music file simply plays no music, and an empty/missing nav sound falls back to
+// a synthesized thud so menu navigation always has feedback.
+typedef struct AudioConfig {
+    char music_file[256];      // looping background music; "" or missing = no music
+    char nav_sfx_file[256];    // menu focus-move sound; "" or missing = synthesized
+    char select_sfx_file[256]; // menu activate/confirm sound; "" or missing = synthesized
+    float music_volume;        // 0..1
+    float sfx_volume;       // 0..1
+    bool muted;             // master mute; volumes are preserved while muted
+} AudioConfig;
 
 // Developer/debug options, mirrored from the `debug` table in config.lua.
 typedef struct DebugConfig {
@@ -107,6 +137,7 @@ typedef struct SaveConfig {
 typedef struct Config {
     WindowConfig window;
     UiConfig ui;
+    AudioConfig audio;
     DebugConfig debug;
     SaveConfig save;
 } Config;

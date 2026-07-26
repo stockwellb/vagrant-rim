@@ -13,7 +13,7 @@
 #include "config/config.h"
 #include "save/save.h" // SAVE_MAX_SLOTS
 
-static const char *kTmpCfg = "/tmp/vagrant_rim_test_config.lua";
+static const char *tmp_cfg = "/tmp/vagrant_rim_test_config.lua";
 
 void setUp(void) {}
 void tearDown(void) {}
@@ -21,7 +21,7 @@ void tearDown(void) {}
 // Write `contents` to the temp config path; fail the test if it can't be written.
 static void write_config(const char *contents)
 {
-    FILE *f = fopen(kTmpCfg, "w");
+    FILE *f = fopen(tmp_cfg, "w");
     TEST_ASSERT_NOT_NULL_MESSAGE(f, "could not open temp config for writing");
     fputs(contents, f);
     fclose(f);
@@ -44,7 +44,7 @@ static void test_empty_table_keeps_defaults(void)
     write_config("return {}\n");
     Config c;
     char err[128] = {0};
-    TEST_ASSERT_TRUE(config_load(&c, kTmpCfg, err, sizeof(err)));
+    TEST_ASSERT_TRUE(config_load(&c, tmp_cfg, err, sizeof(err)));
     TEST_ASSERT_EQUAL_INT(1280, c.window.width); // untouched default
     TEST_ASSERT_EQUAL_INT(60, c.window.target_fps);
 }
@@ -54,7 +54,7 @@ static void test_present_keys_override_only_themselves(void)
     write_config("return { window = { width = 800, title = \"Test Title\" } }\n");
     Config c;
     char err[128] = {0};
-    TEST_ASSERT_TRUE(config_load(&c, kTmpCfg, err, sizeof(err)));
+    TEST_ASSERT_TRUE(config_load(&c, tmp_cfg, err, sizeof(err)));
     TEST_ASSERT_EQUAL_INT(800, c.window.width);            // overridden
     TEST_ASSERT_EQUAL_STRING("Test Title", c.window.title); // overridden
     TEST_ASSERT_EQUAL_INT(720, c.window.height);           // still default
@@ -74,7 +74,7 @@ static void test_out_of_range_values_are_clamped(void)
         "}\n");
     Config c;
     char err[128] = {0};
-    TEST_ASSERT_TRUE(config_load(&c, kTmpCfg, err, sizeof(err)));
+    TEST_ASSERT_TRUE(config_load(&c, tmp_cfg, err, sizeof(err)));
 
     TEST_ASSERT_EQUAL_INT(320, c.window.width);   // clamped up to min
     TEST_ASSERT_EQUAL_INT(4320, c.window.height); // clamped down to max
@@ -90,7 +90,7 @@ static void test_slots_clamped_up_to_one(void)
     write_config("return { save = { slots = 0 } }\n");
     Config c;
     char err[128] = {0};
-    TEST_ASSERT_TRUE(config_load(&c, kTmpCfg, err, sizeof(err)));
+    TEST_ASSERT_TRUE(config_load(&c, tmp_cfg, err, sizeof(err)));
     TEST_ASSERT_EQUAL_INT(1, c.save.slots); // at least one slot
 }
 
@@ -109,7 +109,7 @@ static void test_non_table_return_is_false(void)
     write_config("return 42\n"); // valid Lua, but not a table
     Config c;
     char err[128] = {0};
-    TEST_ASSERT_FALSE(config_load(&c, kTmpCfg, err, sizeof(err)));
+    TEST_ASSERT_FALSE(config_load(&c, tmp_cfg, err, sizeof(err)));
     TEST_ASSERT_EQUAL_INT(1280, c.window.width); // defaults preserved
 }
 
@@ -118,7 +118,7 @@ static void test_syntax_error_reports_message(void)
     write_config("return { this is not valid lua =\n");
     Config c;
     char err[128] = {0};
-    TEST_ASSERT_FALSE(config_load(&c, kTmpCfg, err, sizeof(err)));
+    TEST_ASSERT_FALSE(config_load(&c, tmp_cfg, err, sizeof(err)));
     TEST_ASSERT_TRUE(err[0] != '\0'); // an error message was written
 }
 

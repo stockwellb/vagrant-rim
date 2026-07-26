@@ -13,7 +13,7 @@
 
 // Save directory, resolved relative to the working directory (the project root
 // during development via set_rundir).
-static const char *kSaveDir = "saves";
+static const char *save_dir = "saves";
 
 long long save_now(void)
 {
@@ -122,13 +122,13 @@ bool save_exists(const char *path)
 
 void save_slot_path(int slot, char *out, int out_size)
 {
-    snprintf(out, (size_t)out_size, "%s/slot%d.lua", kSaveDir, slot);
+    snprintf(out, (size_t)out_size, "%s/slot%d.lua", save_dir, slot);
 }
 
 bool save_write_slot(const GameSave *save, int slot)
 {
-    if (!DirectoryExists(kSaveDir)) {
-        MakeDirectory(kSaveDir);
+    if (!DirectoryExists(save_dir)) {
+        MakeDirectory(save_dir);
     }
     char path[512];
     save_slot_path(slot, path, sizeof(path));

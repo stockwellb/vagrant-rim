@@ -13,8 +13,8 @@
 
 // Settings live next to the save slots, relative to the working directory (the
 // project root during development via set_rundir).
-static const char *kSettingsDir = "saves";
-static const char *kSettingsPath = "saves/settings.lua";
+static const char *settings_dir = "saves";
+static const char *settings_path = "saves/settings.lua";
 
 bool settings_load(Settings *s)
 {
@@ -24,7 +24,7 @@ bool settings_load(Settings *s)
     if (!L) {
         return false;
     }
-    if (luaL_dofile(L, kSettingsPath) != LUA_OK || !lua_istable(L, -1)) {
+    if (luaL_dofile(L, settings_path) != LUA_OK || !lua_istable(L, -1)) {
         lua_close(L);
         return false;
     }
@@ -41,8 +41,8 @@ bool settings_load(Settings *s)
 
 bool settings_save(const Settings *s)
 {
-    if (!DirectoryExists(kSettingsDir)) {
-        MakeDirectory(kSettingsDir);
+    if (!DirectoryExists(settings_dir)) {
+        MakeDirectory(settings_dir);
     }
 
     char buf[256];
@@ -60,5 +60,5 @@ bool settings_save(const Settings *s)
 
     // Temp file + atomic rename (shared with the save writer): an interrupted
     // write can't corrupt the existing settings.
-    return atomic_write(kSettingsPath, buf);
+    return atomic_write(settings_path, buf);
 }

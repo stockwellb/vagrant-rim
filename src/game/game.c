@@ -20,7 +20,7 @@
 
 // Candidate locations for the config file, tried in order. Covers both running
 // from the project root during development and the installed bin/assets layout.
-static const char *kConfigPaths[] = {
+static const char *config_paths[] = {
     "assets/config.lua",
     "bin/assets/config.lua",
     "config.lua",
@@ -60,13 +60,13 @@ static void save_settings(void)
 static void load_config(Game *game)
 {
     char err[256];
-    for (int i = 0; i < (int)(sizeof(kConfigPaths) / sizeof(kConfigPaths[0])); i++) {
-        if (FileExists(kConfigPaths[i])) {
-            if (config_load(&game->config, kConfigPaths[i], err, sizeof(err))) {
-                TraceLog(LOG_INFO, "CONFIG: loaded '%s'", kConfigPaths[i]);
+    for (int i = 0; i < (int)(sizeof(config_paths) / sizeof(config_paths[0])); i++) {
+        if (FileExists(config_paths[i])) {
+            if (config_load(&game->config, config_paths[i], err, sizeof(err))) {
+                TraceLog(LOG_INFO, "CONFIG: loaded '%s'", config_paths[i]);
             } else {
                 TraceLog(LOG_WARNING, "CONFIG: failed to load '%s': %s — using defaults",
-                         kConfigPaths[i], err);
+                         config_paths[i], err);
                 config_set_defaults(&game->config);
             }
             return;
